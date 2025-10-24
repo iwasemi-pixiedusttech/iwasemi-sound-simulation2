@@ -423,7 +423,7 @@
         </div>
       </div>
 
-      <!-- 0) 提案サマリー（横の余白が出ないよう block / w-full） -->
+      <!-- 0) 提案サマリー -->
       <div id="proposalSummary" class="mt-4 w-full"></div>
 
       <!-- 1) エビデンス -->
@@ -435,14 +435,17 @@
       <!-- 3) iwasemi見積（詳細） -->
       <div id="iwasemiWrap" class="mt-6"></div>
 
-      <!-- 4) 近い導入事例（※TELECUBE時は非表示） -->
+      <!-- 4) 近い導入事例 -->
       <div id="caseWrap" class="mt-6"></div>
 
-      <!-- 5) TELECUBE 参考事例（TELECUBE時のみ表示） -->
+      <!-- 5) TELECUBE 参考事例 -->
       <div id="telecubeWrap" class="mt-6"></div>
 
       <!-- 備考 -->
       <div id="notesWrap" class="mt-6"></div>
+
+      <!-- 6) 残響時間 比較グラフ（ここに動的挿入） -->
+      <div id="rtChartWrap" class="mt-6"></div>
     </section>
 
     <footer class="text-sm text-slate-500 dark:text-slate-400 mt-10">©Pixie Dust Technologies Inc.</footer>
@@ -613,7 +616,11 @@
       const Aeq1000= Math.min(Aflat1000/(1-cap), Aflat1000+ Aceil1000);
       const T500 = 0.161 * V / Math.max(0.001, Aeq500);
       const T1000= 0.161 * V / Math.max(0.001, Aeq1000);
-      return { V,A,H,s,wallAreas,floorArea,ceilArea,Aeq500,Aeq1000,T500,T1000 };
+      return {
+        V,A,H,s,wallAreas,floorArea,ceilArea,
+        Aflat500,Aflat1000,Aceil500,Aceil1000,cap,
+        Aeq500,Aeq1000,T500,T1000
+      };
     }
 
     // Scores
@@ -728,9 +735,11 @@
 
     /* ========== Render ========== */
     function clearResult(){
+      if (window.__rtChart){ try{ window.__rtChart.destroy(); }catch(_){ } window.__rtChart=null; }
       $('#proposalSummary').innerHTML=''; $('#evidenceWrap').innerHTML='';
       $('#recommendWrap').innerHTML=''; $('#iwasemiWrap').innerHTML='';
       $('#caseWrap').innerHTML=''; $('#telecubeWrap').innerHTML=''; $('#notesWrap').innerHTML='';
+      $('#rtChartWrap').innerHTML='';
     }
     function cardExplainAbs(s){ if(s>=70)return'吸音材の導入が強く推奨されます（高残響）。'; if(s>=40)return'吸音導入で明瞭度の改善が期待できます。'; if(s>=12)return'軽微な吸音でも改善が見込めます。'; return'現状、吸音の必要性は小さいと推定されます。'; }
     function cardExplainIsl(s){ if(s>=60)return'遮音工事が主目的（欄間・共有天井・隙間等の経路対策）。'; if(s>=45)return'隙間封止等の簡易遮音と吸音の併用が有効です。'; if(s>=30)return'軽微な回り込み対策を検討してください。'; return'現状、遮音（漏れ/侵入）の優先度は高くありません。'; }
@@ -750,7 +759,7 @@
     function renderProposalSummary(d, recs, S, rt, panelSol){
       const top = recs[0];
       const std=panelSol.plans.find(p=>p.name==='標準');
-      const pro=panelSol.plans.find(p=>p.name==='強め'); // 修正：プラン名
+      const pro=panelSol.plans.find(p=>p.name==='強め');
 
       let priceLine = `<span class="badge bg-white/60 dark:bg-slate-800/60">別途見積</span>`;
       if (['吸音','吸音＋隙間対策','吸音（ブース内面）'].includes(top.label) || ['absorption','abs_plus_seal'].includes(top.key)){
@@ -1104,9 +1113,10 @@
       price_pro:'entry.382111843',
       raw_json:'entry.1555376589',
 
-      // 代理店担当者情報（新規3項目）
+      // 代理店担当者情報（★支店名IDは実フォームのIDに差し替え推奨）
       agentCompany:'entry.1294566503',
       agentPerson:'entry.2017082841',
+      agentBranch:'entry.9999999999', // ← 仮ID：実際のentry IDに置換してください
       agentEmail:'entry.1181916971',
     };
     function buildGoogleFormPayload(diag){
@@ -1126,7 +1136,7 @@
         raw_json: JSON.stringify(diag),
 
         // 代理店
-        agentCompany:d.agentCompany, agentPerson:d.agentPerson, agentEmail:d.agentEmail,
+        agentCompany:d.agentCompany, agentPerson:d.agentPerson, agentBranch:d.agentBranch, agentEmail:d.agentEmail,
       };
     }
     async function postToGoogleForm(payload){
@@ -1139,6 +1149,132 @@
         try{ const blob=new Blob([params.toString()],{type:'application/x-www-form-urlencoded;charset=UTF-8'}); if(navigator.sendBeacon(GF_ENDPOINT,blob)) return {ok:true,mode:'beacon'}; }catch(_){}
         return {ok:false};
       }
+    }
+
+    /* ========== 残響時間 比較グラフ：実装 ========== */
+    const ABS_PER_PANEL_DEFAULT = { 500: 0.02, 1000: 0.03 }; // m²/枚（仮定・調整可）
+    function getAbsPerPanel(){
+      try{
+        const s = localStorage.getItem('absPerPanel_iwasemi');
+        if (!s) return {...ABS_PER_PANEL_DEFAULT};
+        const j = JSON.parse(s);
+        if (typeof j['500'] === 'number' && typeof j['1000'] === 'number') return j;
+        return {...ABS_PER_PANEL_DEFAULT};
+      }catch(_){ return {...ABS_PER_PANEL_DEFAULT}; }
+    }
+    function setAbsPerPanel(v){
+      try{ localStorage.setItem('absPerPanel_iwasemi', JSON.stringify(v)); }catch(_){}
+    }
+    async function ensureChartJs(){
+      if (window.Chart) return;
+      await new Promise(res=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/chart.js';
+        s.onload=res; s.onerror=res;
+        document.head.appendChild(s);
+      });
+    }
+    function calcTwithAddedAbs({V,cap,Aflat500,Aflat1000,Aceil500,Aceil1000}, add500, add1000){
+      const Aflat500p = Aflat500 + add500;
+      const Aflat1000p= Aflat1000 + add1000;
+      const Aeq500p = Math.min(Aflat500p/(1-cap), Aflat500p + Aceil500);
+      const Aeq1000p= Math.min(Aflat1000p/(1-cap), Aflat1000p + Aceil1000);
+      const T500p = 0.161 * V / Math.max(0.001, Aeq500p);
+      const T1000p= 0.161 * V / Math.max(0.001, Aeq1000p);
+      return { T500p, T1000p, Aeq500p, Aeq1000p };
+    }
+    async function renderRTChart(d, rt, panelSol){
+      const wrap = $('#rtChartWrap');
+      wrap.innerHTML = '';
+      if (rt.T500==null || rt.T1000==null) return; // TELECUBEなどはスキップ
+
+      await ensureChartJs();
+
+      const perPanel = getAbsPerPanel(); // {500,1000}
+      const stdPanels = panelSol?.plans?.find(p=>p.name==='標準')?.panels ?? 0;
+      const proPanels = panelSol?.plans?.find(p=>p.name==='強め')?.panels ?? 0;
+      const addStd500 = stdPanels * (perPanel[500] || perPanel['500'] || 0);
+      const addStd1000= stdPanels * (perPanel[1000]|| perPanel['1000']|| 0);
+      const addPro500 = proPanels * (perPanel[500] || perPanel['500'] || 0);
+      const addPro1000= proPanels * (perPanel[1000]|| perPanel['1000']|| 0);
+
+      const afterStd = calcTwithAddedAbs(rt, addStd500, addStd1000);
+      const afterPro  = calcTwithAddedAbs(rt, addPro500, addPro1000);
+
+      // セクション生成
+      const sec = document.createElement('div');
+      sec.className='p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700';
+      sec.id='rtChartSection';
+      sec.innerHTML = `
+        <div class="text-base font-semibold mb-3">残響時間 比較（500/1000Hz）</div>
+        <canvas id="rtChartCanvas" height="120" aria-label="残響時間比較グラフ"></canvas>
+        <div class="mt-3 text-xs text-slate-600 dark:text-slate-300">
+          想定：iwasemi 1枚あたり等価吸音面積＝
+          <label class="inline-flex items-center gap-1">500Hz
+            <input id="abs500Input" type="number" step="0.005" min="0" class="w-20 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent" value="${(perPanel[500]||perPanel['500']).toFixed(3)}">
+            m²</label>
+          <span class="mx-2">/</span>
+          <label class="inline-flex items-center gap-1">1000Hz
+            <input id="abs1000Input" type="number" step="0.005" min="0" class="w-20 px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent" value="${(perPanel[1000]||perPanel['1000']).toFixed(3)}">
+            m²</label>
+          <button id="absApplyBtn" class="ml-2 px-2 py-1 rounded bg-slate-900 text-white text-xs dark:bg-slate-100 dark:text-slate-900">再計算</button>
+          <button id="absResetBtn" class="ml-1 px-2 py-1 rounded border border-slate-300 text-xs dark:border-slate-700">既定値</button>
+          <div class="mt-2 opacity-75">
+            現状：500Hz=${fmt2(rt.T500)}s / 1000Hz=${fmt2(rt.T1000)}s　
+            標準（概算）：500Hz=${fmt2(afterStd.T500p)}s / 1000Hz=${fmt2(afterStd.T1000p)}s　
+            強め（概算）：500Hz=${fmt2(afterPro.T500p)}s / 1000Hz=${fmt2(afterPro.T1000p)}s
+          </div>
+        </div>
+      `;
+      wrap.appendChild(sec);
+
+      const ctx = $('#rtChartCanvas', sec).getContext('2d');
+      if (window.__rtChart){ try{ window.__rtChart.destroy(); }catch(_){ } }
+      window.__rtChart = new Chart(ctx, {
+        type:'line',
+        data:{
+          labels:['500 Hz','1000 Hz'],
+          datasets:[
+            { label:'現状', data:[rt.T500, rt.T1000], tension:0.15, borderWidth:2, pointRadius:3 },
+            { label:'iwasemi（標準）', data:[afterStd.T500p, afterStd.T1000p], tension:0.15, borderWidth:2, pointRadius:3 },
+            { label:'iwasemi（強め）', data:[afterPro.T500p, afterPro.T1000p], tension:0.15, borderWidth:2, pointRadius:3, borderDash:[6,4] }
+          ]
+        },
+        options:{
+          responsive:true,
+          plugins:{
+            legend:{ position:'bottom' },
+            tooltip:{ callbacks:{
+              label:(ctx)=> `${ctx.dataset.label}: ${fmt2(ctx.parsed.y)} s`
+            }}
+          },
+          scales:{
+            y:{ title:{display:true, text:'残響時間 [s]'}, beginAtZero:true, suggestedMax: Math.max(rt.T500, rt.T1000)*1.3 },
+            x:{ title:{display:true, text:'周波数'} }
+          }
+        }
+      });
+
+      // 設定UIイベント
+      $('#absApplyBtn', sec).addEventListener('click', ()=>{
+        const v500 = Number($('#abs500Input', sec).value||0);
+        const v1k  = Number($('#abs1000Input', sec).value||0);
+        if (v500>=0 && v1k>=0){
+          setAbsPerPanel({500:v500,1000:v1k});
+          renderRTChart(d, rt, panelSol); // 再描画
+        }
+      });
+      $('#absResetBtn', sec).addEventListener('click', ()=>{
+        setAbsPerPanel({...ABS_PER_PANEL_DEFAULT});
+        renderRTChart(d, rt, panelSol);
+      });
+
+      // state をJSON出力にも含めるため保存
+      window.__rtAfter = {
+        perPanel: getAbsPerPanel(),
+        std:{ panels: stdPanels, T500: afterStd.T500p, T1000: afterStd.T1000p, Aeq500: afterStd.Aeq500p, Aeq1000: afterStd.Aeq1000p },
+        pro:{ panels: proPanels, T500: afterPro.T500p,  T1000: afterPro.T1000p,  Aeq500: afterPro.Aeq500p,  Aeq1000: afterPro.Aeq1000p }
+      };
     }
 
     /* ========== Diagnose main ========== */
@@ -1164,7 +1300,7 @@
         return;
       }
 
-      // TELECUBE：スコア・RTは参考扱いで、近い導入事例は非表示。代わりにTELECUBE参考事例を表示
+      // TELECUBE：スコア・RTは参考扱い
       if (d.spaceType==='booth_tel'){
         const recs=[{key:'absorption',label:'吸音（ブース内面）',priority:'高',score:50,reason:'ブース内で残響（音の響き）が強く声がこもりやすいため、ガラスや金属面に小型吸音パネルを分散配置することが効果的です。'}];
         const dummyRT={T500:null,T1000:null,Aeq500:null,Aeq1000:null,V:null,A:d.area,H:H};
@@ -1177,7 +1313,7 @@
         renderIwasemiDetail(d, panelSol, primaryKey);
         renderNotes(primaryKey);
 
-        // TELECUBE参考事例（画像はDriveサムネイルAPI）
+        // TELECUBE参考事例
         renderTelecubeGallery();
 
         const diag={input:d,scores:S,rt:dummyRT,recommendations:recs,panels:panelSol};
@@ -1202,7 +1338,10 @@
       const matchedCases = selectCaseStudies(d, S, rt);
       renderCaseStudies(matchedCases);
 
-      const diag={input:d,scores:S,rt,recommendations:recs,panels:panelSol};
+      // 残響時間 比較グラフ（最下部）
+      await renderRTChart(d, rt, panelSol);
+
+      const diag={input:d,scores:S,rt,recommendations:recs,panels:panelSol, rt_after: window.__rtAfter||null};
       window.__diagResult=diag;
 
       // 欄間/共有天井/ガラリのとき全画面TIPS（1回）

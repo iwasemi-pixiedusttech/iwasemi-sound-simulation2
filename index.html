@@ -25,8 +25,8 @@
     }
   </script>
 
-  <!-- Chart.js（グラフ用） -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Chart.js for RT graph -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     :root{ color-scheme: light dark; }
@@ -438,29 +438,27 @@
       <!-- 3) iwasemi見積（詳細） -->
       <div id="iwasemiWrap" class="mt-6"></div>
 
-      <!-- 4) 近い導入事例 -->
+      <!-- 4) 近い導入事例（※TELECUBE時は非表示） -->
       <div id="caseWrap" class="mt-6"></div>
 
-      <!-- 5) TELECUBE 参考事例 -->
+      <!-- 5) TELECUBE 参考事例（TELECUBE時のみ表示） -->
       <div id="telecubeWrap" class="mt-6"></div>
 
-      <!-- ▼▼▼ グラフ（注意・前提の1つ上） ▼▼▼ -->
-      <div id="rtChartWrap" class="mt-6 p-4 md:p-6 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700" style="display:none">
+      <!-- 6) 残響時間 比較（周波数別）— 注意・前提の直前に配置 -->
+      <div id="rtChartWrap" class="mt-6 p-4 md:p-6 rounded-2xl bg-white dark:bg-slate-800 shadow-sm hidden">
         <div class="flex items-center justify-between">
-          <div>
-            <div class="text-base font-semibold">残響時間 比較（推定）</div>
-            <p id="rtChartNote" class="text-xs text-slate-500 mt-1">
-              現状の推定残響時間と、iwasemi設置後（標準プラン）の推定残響時間を周波数別に比較します。
-            </p>
-          </div>
+          <h3 class="text-base font-semibold">残響時間 比較（周波数別）</h3>
         </div>
+        <p class="text-xs text-slate-500 mt-1">
+          現状の推定残響時間と、iwasemi設置後（標準プラン）の推定残響時間を周波数別に比較します。<br>
+          ※「現状」値は、入力された壁/床/天井材の500/1000Hz吸音率を基に、他帯域を簡易推定しています。
+        </p>
         <div class="mt-4 h-64 md:h-80">
           <canvas id="rtChart"></canvas>
         </div>
       </div>
-      <!-- ▲▲▲ /グラフ ▲▲▲ -->
 
-      <!-- 備考 -->
+      <!-- 7) 注意・前提 -->
       <div id="notesWrap" class="mt-6"></div>
     </section>
 
@@ -499,8 +497,7 @@
     const $$ = (sel, el=document)=> Array.from(el.querySelectorAll(sel));
     const enc = (s)=> encodeURIComponent(s||'');
     const yen = (n)=> '¥' + (Math.round(n)||0).toLocaleString('ja-JP');
-    // ★ 書式はご指定の fmt2 に合わせる
-    function fmt2(n){ return (Math.round(n*100)/100).toFixed(2); }
+    const fmt2 = (n)=> (Math.round((n??0)*100)/100).toFixed(2);
 
     // Theme
     const themeBtn = $('#themeToggle');
@@ -607,6 +604,18 @@
     const getAlphaFloor = (k)=> ({carpet:alpha.carpet, wood:alpha.wood_f, pvc:alpha.pvc, tile_stone:alpha.tile_stone}[k]||alpha.floor_unknown);
     const getAlphaCeil = (k)=> alpha[k]||alpha.ceil_unknown;
 
+    // --- 6帯域（250,500,1000,2000,4000,8000Hz）への簡易展開（500/1000Hzから推定） ---
+    const FREQS = [250, 500, 1000, 2000, 4000, 8000];
+    function clamp01(x){ return Math.max(0.01, Math.min(0.99, x)); }
+    function expandAlphaPair(a500,a1000){
+      const a250  = clamp01(0.6*a500 - 0.02);
+      const a2k   = clamp01(a1000*1.08 + 0.01);
+      const a4k   = clamp01(a2k*1.08);
+      const a8k   = clamp01(a4k*1.05);
+      return [a250, clamp01(a500), clamp01(a1000), a2k, a4k, a8k];
+    }
+    function expandAlphaObj(obj){ return expandAlphaPair(obj.a500??0.1, obj.a1000??0.1); }
+
     function heightFromKey(k){ if(k==='lt2_5')return 2.4; if(k==='2_5_3_0')return 2.75; if(k==='3_0_3_5')return 3.25; if(k==='gt3_5')return 3.8; return 2.7; }
     function rtTarget(spaceType, uses){
       let t=0.6;
@@ -618,51 +627,36 @@
       return t;
     }
 
-    /* ====== 6帯域展開のための補助 ======
-       既知：各材の a500 / a1000。
-       仮定：ln(f) に対して 500→1000 の傾きを外挿/内挿して 250/2000/4000/8000 を推定。
-       上限は [0, 0.99] にクリップ。 */
-    const FREQS = [250, 500, 1000, 2000, 4000, 8000];
-    function expandAlpha(a500, a1000){
-      const ln = Math.log;
-      const f500=500, f1000=1000;
-      const slope = (a1000 - a500) / (ln(f1000) - ln(f500) || 1);
-      return FREQS.map(f=>{
-        const val = a500 + slope*(Math.log(f)-Math.log(f500));
-        return Math.max(0, Math.min(0.99, val));
-      });
-    }
-
-    // === calcRT を 6帯域対応 ===
     function calcRT(d){
       const A = Math.max(0.1, d.area); const H = heightFromKey(d.ceilHeight); const V = A*H;
       const s = Math.sqrt(A); const wallAreas=[s*H,s*H,s*H,s*H]; const floorArea=A; const ceilArea=A;
 
-      // 吸音率スペクトル
-      const awSpecs = d.walls.map(w=>{
-        const a = getAlphaWall(w); return expandAlpha(a.a500, a.a1000);
-      });
-      const af0 = getAlphaFloor(d.floor); const afSpec = expandAlpha(af0.a500, af0.a1000);
-      const ac0 = getAlphaCeil(d.ceiling); const acSpec = expandAlpha(ac0.a500, ac0.a1000);
+      // 500/1000Hzの素材吸音率
+      const aw = d.walls.map(getAlphaWall), af=getAlphaFloor(d.floor), ac=getAlphaCeil(d.ceiling);
 
-      // 有効天井係数・上限キャップ
+      // === 6帯域に展開して合成 ===
       const CEIL_EFF=0.60, cap=0.45;
 
-      // 周波数ごとの等価吸音面積と T
+      // 各面の6帯域吸音率
+      const aw_f = aw.map(expandAlphaObj);  // 4 x 6
+      const af_f = expandAlphaObj(af);      // 6
+      const ac_f = expandAlphaObj(ac);      // 6
+
+      // 帯域ごとの等価吸音面積
       const Aeq_values = FREQS.map((_, i)=>{
-        const walls = awSpecs[0][i]*wallAreas[0] + awSpecs[1][i]*wallAreas[1] + awSpecs[2][i]*wallAreas[2] + awSpecs[3][i]*wallAreas[3];
-        const floor = afSpec[i]*floorArea;
-        const ceil  = acSpec[i]*ceilArea*CEIL_EFF;
+        const walls = aw_f[0][i]*wallAreas[0] + aw_f[1][i]*wallAreas[1] + aw_f[2][i]*wallAreas[2] + aw_f[3][i]*wallAreas[3];
+        const floor = af_f[i]*floorArea;
+        const ceil  = ac_f[i]*ceilArea*CEIL_EFF;
         const Aflat = walls + floor;
         return Math.min(Aflat/(1-cap), Aflat + ceil);
       });
 
-      const T_values = Aeq_values.map(Aeq=> 0.161 * V / Math.max(0.001, Aeq));
+      const T_values = Aeq_values.map(Aeq => 0.161 * V / Math.max(0.001, Aeq));
 
-      // 従来互換（500/1000Hz）
-      const i500 = FREQS.indexOf(500), i1000 = FREQS.indexOf(1000);
-      const T500 = T_values[i500], T1000 = T_values[i1000];
-      const Aeq500 = Aeq_values[i500], Aeq1000 = Aeq_values[i1000];
+      // 既存の500/1000出力（後方互換）
+      const idx500 = FREQS.indexOf(500), idx1000=FREQS.indexOf(1000);
+      const Aeq500 = Aeq_values[idx500], Aeq1000 = Aeq_values[idx1000];
+      const T500   = T_values[idx500],   T1000    = T_values[idx1000];
 
       return { V,A,H,s,wallAreas,floorArea,ceilArea,Aeq500,Aeq1000,T500,T1000, Aeq_values, T_values };
     }
@@ -720,17 +714,12 @@
       const last=PANEL_ANCHORS[PANEL_ANCHORS.length-1], prev=PANEL_ANCHORS[PANEL_ANCHORS.length-2];
       const slope=(last.p-prev.p)/(last.a-prev.a); return Math.round(last.p + (area-last.a)*slope);
     }
-    const UNIT_PRICE=5000; // 既存
-    // 平均吸音率（500/1000Hz）…グラフ側のパネル α と整合
-    const PANEL_AREA = 0.03;
-    const PANEL_ALPHA_FREQS = [0.05, 0.35, 0.76, 0.22, 0.11, 0.13];
-    const PANEL_ALPHA_AVG = (PANEL_ALPHA_FREQS[1] + PANEL_ALPHA_FREQS[2]) / 2; // 0.555
-
+    const UNIT_PRICE=5000;
+    // iwasemiの仕様（グラフ用にTtgt/basePanelsも返す）
     function buildPanelSolutions(d, primaryKey, rt){
-      const perRoomStd = Math.max(1, interpPanels(d.area));
-      const totalStd   = perRoomStd*Math.max(1,Math.round(d.rooms));
-      const totalPro   = Math.max(totalStd+1, Math.round(totalStd*1.2));
-
+      const perRoomStd=Math.max(1, interpPanels(d.area));
+      const totalStd=perRoomStd*Math.max(1,Math.round(d.rooms));
+      const totalPro=Math.max(totalStd+1, Math.round(totalStd*1.2));
       function bomFor(panels, withSeal){
         const parts=[]; const pricePanels=panels*UNIT_PRICE; parts.push({name:'iwasemi パネル（代表）', qty:panels, price:pricePanels});
         let extras=0;
@@ -742,13 +731,14 @@
       const needSeal=(primaryKey==='abs_plus_seal' || primaryKey==='isolation');
       const std=bomFor(totalStd, needSeal), pro=bomFor(totalPro, needSeal);
       const Ttgt = rtTarget(d.spaceType, d.uses);
-
       return {
         perRoomStd,totalStd,totalPro,
-        plans:[{name:'標準', panels:totalStd, bom:std.bom, subtotal:std.subtotal},
-               {name:'強め', panels:totalPro, bom:pro.bom, subtotal:pro.subtotal}],
         basePanels: totalStd,
-        Ttgt
+        Ttgt,
+        plans:[
+          {name:'標準', panels:totalStd, bom:std.bom, subtotal:std.subtotal},
+          {name:'強め', panels:totalPro, bom:pro.bom, subtotal:pro.subtotal}
+        ]
       };
     }
 
@@ -798,11 +788,10 @@
       $('#proposalSummary').innerHTML=''; $('#evidenceWrap').innerHTML='';
       $('#recommendWrap').innerHTML=''; $('#iwasemiWrap').innerHTML='';
       $('#caseWrap').innerHTML=''; $('#telecubeWrap').innerHTML=''; $('#notesWrap').innerHTML='';
-      // グラフもリセット
-      try {
-        if (window.myRtChart) { window.myRtChart.destroy(); window.myRtChart=null; }
-      } catch(e){}
-      const chartWrap = $('#rtChartWrap'); if (chartWrap) chartWrap.style.display='none';
+      // グラフ非表示
+      const wrap = $('#rtChartWrap');
+      if (wrap){ wrap.style.display='none'; }
+      if (window.myRtChart){ try{ window.myRtChart.destroy(); }catch(_){} window.myRtChart=null; }
     }
     function cardExplainAbs(s){ if(s>=70)return'吸音材の導入が強く推奨されます（高残響）。'; if(s>=40)return'吸音導入で明瞭度の改善が期待できます。'; if(s>=12)return'軽微な吸音でも改善が見込めます。'; return'現状、吸音の必要性は小さいと推定されます。'; }
     function cardExplainIsl(s){ if(s>=60)return'遮音工事が主目的（欄間・共有天井・隙間等の経路対策）。'; if(s>=45)return'隙間封止等の簡易遮音と吸音の併用が有効です。'; if(s>=30)return'軽微な回り込み対策を検討してください。'; return'現状、遮音（漏れ/侵入）の優先度は高くありません。'; }
@@ -965,7 +954,7 @@
         </div>`;
     }
 
-    /* ===== 導入事例（省略 … 既存のまま） ===== */
+    /* ===== 導入事例 ===== */
     const CASES = [
       {company:'One&Co（シンガポール・Tanjong Pagar）', place:'ブース',   space:'会議室（密閉）',     problem:'音漏れ', effects:['集中力向上','音漏れの低減'], area:3,   rooms:1},
       {company:'ヤンマーホールディングス株式会社',          place:'会議室', space:'会議室（密閉）',     problem:'音漏れ', effects:['集中力向上','音漏れの低減'], area:19,  rooms:1},
@@ -1022,7 +1011,7 @@
     function getCaseImg(name){ const k=Object.keys(CASE_IMG).find(key=> name.includes(key)); return k?CASE_IMG[k]:''; }
     function getCaseUrl(name){ const k=Object.keys(CASE_URL).find(key=> name.includes(key)); return k?CASE_URL[k]:''; }
 
-    // ユーザー入力→日本語ラベル（略）…
+    // ユーザー入力→日本語ラベル
     function mapUserPlace(d){
       if (d.spaceType?.startsWith('booth')) return 'ブース';
       if (d.spaceType==='studio') return 'スタジオ';
@@ -1048,6 +1037,8 @@
       const m = { clarity_meeting:'会議の聞き取り', clarity_web:'Web会議の聞き取り', speaking:'話しやすさ', focus:'集中力向上', leakage:'音漏れの低減' };
       return (d.effects||[]).map(x=> m[x]).filter(Boolean);
     }
+
+    // 事例スコア
     function caseScore(d, S, rt, c){
       let score=0;
       const uSpace=mapUserSpace(d);
@@ -1096,7 +1087,7 @@
         </div>`;
     }
 
-    /* ===== TELECUBE 参考事例（既存） ===== */
+    /* ===== TELECUBE 参考事例（4パターン） ===== */
     const TELECUBE_PHOTOS = [
       {title:'Cタイプ／1人用（片面ガラス）', sheets:'RC-α21枚', id:'1Ep_TSHn8RYXW1qHbiuxyAbuf6hdIL0Vk'},
       {title:'Cタイプ／4人用（片面ガラス）', sheets:'RC-α42枚', id:'1SASFmd2OW48eis-z6AsaO6l2vwJghsmV'},
@@ -1122,8 +1113,12 @@
           </div>
         </div>`;
     }
+    function clearTelecubeGallery(){
+      const wrap = $('#telecubeWrap');
+      if (wrap) wrap.innerHTML = '';
+    }
 
-    /* ========== Googleフォーム送信（既存） ========== */
+    /* ========== Googleフォーム送信 ========== */
     const GF_FORM_ID='1FAIpQLSf8Eo_j14pXA3mTRSt5tN_gQ0Py46cV-8Rd1ZBW7Nt9cltIpQ';
     const GF_ENDPOINT=`https://docs.google.com/forms/d/e/${GF_FORM_ID}/formResponse`;
     const ENTRY_MAP = {
@@ -1154,6 +1149,7 @@
       glazing:'entry.1003016767',
       features:'entry.685782864',
 
+      // 新設4項目（URL順）
       industry:'entry.863972',
       size:'entry.743322677',
       timeline:'entry.335161338',
@@ -1173,6 +1169,7 @@
       price_pro:'entry.382111843',
       raw_json:'entry.1555376589',
 
+      // 代理店担当者情報（新規3項目）
       agentCompany:'entry.1294566503',
       agentPerson:'entry.2017082841',
       agentEmail:'entry.1181916971',
@@ -1193,6 +1190,7 @@
         price_std: panels.plans.find(p=>p.name==='標準')?.subtotal||0, price_pro: panels.plans.find(p=>p.name==='強め')?.subtotal||0,
         raw_json: JSON.stringify(diag),
 
+        // 代理店
         agentCompany:d.agentCompany, agentPerson:d.agentPerson, agentEmail:d.agentEmail,
       };
     }
@@ -1208,43 +1206,38 @@
       }
     }
 
-    /* ========== ★ ご指定のグラフ描画コード（そのまま使用） ========== */
-    // --- ユーティリティ (fmt2 は上部に定義済み) ---
-
-    // --- 吸音・残響計算ロジック (グラフ関連の定数) ---
-    // 周波数帯 (Hz) は上で定義済み FREQS=[250,500,1000,2000,4000,8000]
+    /* ========== Chart：指定のコードを利用 ========== */
+    // 周波数帯 (Hz)
     const FREQ_LABELS = FREQS.map(f => f + 'Hz');
-
-    // iwasemiパネル定数
-    // （buildPanelSolutions と整合させるため重複定義：値は同一）
-    // PANEL_AREA / PANEL_ALPHA_FREQS / PANEL_ALPHA_AVG は上でも定義済み
-    // ここでも参照できるようスコープ共有（再定義はしない）
+    // 【更新】iwasemiパネルの面積 (m²)
+    const PANEL_AREA = 0.03;
+    // 【更新】iwasemiパネルの指定吸音率 (周波数帯 FREQS に対応)
+    const PANEL_ALPHA_FREQS = [0.05, 0.35, 0.76, 0.22, 0.11, 0.13];
+    // 【更新】パネル枚数計算用の平均吸音率 (500Hzと1000Hzの平均)
+    const PANEL_ALPHA_AVG = (PANEL_ALPHA_FREQS[1] + PANEL_ALPHA_FREQS[2]) / 2;
 
     /**
      * @param {object} d - フォーム入力データ
      * @param {object} rt_before - 現状の計算結果 (calcRT の戻り値)
-     * @param {object} panelSol - iwasemi提案 (buildPanelSolutions の戻り値)
+     * @param {object} panelSol - iwasemi提案 (buildPanelSolutions の戻り値) ※Ttgt, plans を含む
      */
     function renderRTChart(d, rt_before, panelSol) {
       try {
-        // --- 設置後の残響時間を計算 ---
+        // 1) 標準プラン枚数
         const std_panels = panelSol.plans.find(p=>p.name==='標準')?.panels || panelSol.basePanels;
 
-        // 追加等価吸音面積（6帯域）
-        const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => {
-          return alpha_panel * PANEL_AREA * std_panels;
-        });
+        // 2) パネルによる追加Aeq（6帯域）
+        const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => alpha_panel * PANEL_AREA * std_panels);
 
-        // 設置後の残響時間（6帯域）
+        // 3) 設置後 T（6帯域）
         const T_after_std = rt_before.Aeq_values.map((Aeq_before, i) => {
           const Aeq_total = Aeq_before + added_Aeq_std[i];
           return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
         });
 
-        // 目標残響時間（全帯域共通）
+        // 目標（全帯域同値）
         const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt);
 
-        // Chart.js で描画
         const ctx = $('#rtChart').getContext('2d');
         if (window.myRtChart) { window.myRtChart.destroy(); }
 
@@ -1260,7 +1253,7 @@
               {
                 label: '現状（推定）',
                 data: rt_before.T_values.map(fmt2),
-                borderColor: 'rgb(107, 114, 128)', // slate-500
+                borderColor: 'rgb(107, 114, 128)',
                 backgroundColor: 'rgba(107, 114, 128, 0.1)',
                 fill: false,
                 tension: 0.1
@@ -1268,7 +1261,7 @@
               {
                 label: 'iwasemi設置後（標準）',
                 data: T_after_std.map(fmt2),
-                borderColor: 'rgb(16, 185, 129)', // emerald-500
+                borderColor: 'rgb(16, 185, 129)',
                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
                 fill: false,
                 tension: 0.1,
@@ -1277,7 +1270,7 @@
               {
                 label: '目標残響時間',
                 data: T_target_line.map(fmt2),
-                borderColor: 'rgb(239, 68, 68)', // red-500
+                borderColor: 'rgb(239, 68, 68)',
                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
                 fill: false,
                 borderDash: [5, 5],
@@ -1291,44 +1284,29 @@
             maintainAspectRatio: false,
             scales: {
               y: {
-                title: {
-                  display: true,
-                  text: '残響時間 (s)',
-                  color: labelColor
-                },
-                ticks: {
-                  color: labelColor,
-                  callback: function(value) { return fmt2(value) + 's'; }
-                },
+                title: { display: true, text: '残響時間 (s)', color: labelColor },
+                ticks: { color: labelColor, callback: (v)=> `${fmt2(v)}s` },
                 grid: { color: gridColor },
                 min: 0
               },
               x: {
-                title: {
-                  display: true,
-                  text: '周波数 (Hz)',
-                  color: labelColor
-                },
+                title: { display: true, text: '周波数 (Hz)', color: labelColor },
                 ticks: { color: labelColor },
                 grid: { color: gridColor }
               }
             },
             plugins: {
-              legend: {
-                labels: { color: labelColor }
-              },
+              legend: { labels: { color: labelColor } },
               tooltip: {
                 callbacks: {
-                  label: function(context) {
-                    return `${context.dataset.label}: ${context.formattedValue} s`;
-                  }
+                  label: (ctx)=> `${ctx.dataset.label}: ${ctx.formattedValue} s`
                 }
               }
             }
           }
         });
 
-        // グラフエリアを表示
+        // 表示
         $('#rtChartWrap').style.display = 'block';
 
       } catch (e) {
@@ -1339,6 +1317,7 @@
 
     /* ========== Diagnose main ========== */
     async function diagnose(){
+      // 手動実行時のみ必須チェック
       if(!window.__autoPreview){
         if(!validateRequiredFields()){ clearResult(); return; }
       }
@@ -1359,10 +1338,10 @@
         return;
       }
 
-      // TELECUBE：参考扱い（グラフは描画しない）
+      // TELECUBE 分岐
       if (d.spaceType==='booth_tel'){
         const recs=[{key:'absorption',label:'吸音（ブース内面）',priority:'高',score:50,reason:'ブース内で残響（音の響き）が強く声がこもりやすいため、ガラスや金属面に小型吸音パネルを分散配置することが効果的です。'}];
-        const dummyRT={T500:null,T1000:null,Aeq500:null,Aeq1000:null,V:null,A:d.area,H:H, Aeq_values:null, T_values:null};
+        const dummyRT={T500:null,T1000:null,Aeq500:null,Aeq1000:null,V:null,A:d.area,H:H, Aeq_values:[], T_values:[]};
         const S={S_abs:null,S_isl:null}; const primaryKey=recs[0].key; const panelSol=buildPanelSolutions(d, primaryKey, dummyRT);
 
         clearResult();
@@ -1371,7 +1350,13 @@
         renderRecommendations(recs, panelSol, primaryKey);
         renderIwasemiDetail(d, panelSol, primaryKey);
         renderNotes(primaryKey);
+
+        // TELECUBE：ギャラリーのみ表示、通常事例は出さない
         renderTelecubeGallery();
+        $('#caseWrap').innerHTML='';
+
+        // グラフは表示しない（製品依存のため）
+        $('#rtChartWrap').style.display='none';
 
         const diag={input:d,scores:S,rt:dummyRT,recommendations:recs,panels:panelSol};
         window.__diagResult=diag;
@@ -1380,7 +1365,7 @@
         return;
       }
 
-      // 通常ルート（6帯域）
+      // 通常ルート
       const rt=calcRT(d); const S={S_abs:scoreAbs(d,rt), S_isl:scoreIsl(d,rt)};
       const recs=recommend(d,S,rt); const primaryKey=recs[0]?.key||'absorption'; const panelSol=buildPanelSolutions(d, primaryKey, rt);
 
@@ -1391,38 +1376,19 @@
       if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetail(d, panelSol, primaryKey);
       renderNotes(primaryKey);
 
-      // === ★ グラフをここで描画（事例より前に実行） ===
+      // 事例：通常は近い導入事例のみ
       try {
-        if (rt?.Aeq_values && rt?.T_values) {
-          renderRTChart(d, rt, panelSol);
-        } else {
-          $('#rtChartWrap').style.display = 'none';
-        }
-      } catch(e) {
-        console.warn('RT chart error:', e);
-        $('#rtChartWrap').style.display = 'none';
-      }
+        const matchedCases = selectCaseStudies(d, S, rt);
+        renderCaseStudies(matchedCases);
+      } catch(e){ console.warn('case study render skipped:', e); }
 
-      // 事例（未定義/エラーでも落ちないように）
-      try {
-        const matchedCases = (typeof selectCaseStudies==='function')
-          ? selectCaseStudies(d, S, rt)
-          : [];
-        if (typeof renderCaseStudies==='function') {
-          renderCaseStudies(matchedCases);
-        }
-      } catch (e) {
-        console.warn('case study render skipped:', e);
-      }
+      // TELECUBEギャラリーは常時消す（通常ルート）
+      clearTelecubeGallery();
 
-      try {
-        if (typeof renderTelecubeGallery==='function') {
-          renderTelecubeGallery();
-        }
-      } catch (e) {
-        console.warn('telecube gallery skipped:', e);
-      }
+      // グラフ（通常のみ表示）
+      try { renderRTChart(d, rt, panelSol); } catch(e){ console.warn('rt chart skipped:', e); }
 
+      // TIPS
       const needsTip=d.features.some(x=>['transom','shared_plenum','grille'].includes(x));
       if (needsTip && !window.__tipShown){ window.__tipShown=true; showTips({transom:d.features.includes('transom')}); }
 

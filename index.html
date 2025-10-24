@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-　<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1"></script>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>iwasemi｜音問題 診断サービス（フォーム連携＋事例連携）</title>
@@ -1388,118 +1386,7 @@
       clearTelecubeGallery();
 
       // グラフ（通常のみ表示）
-      // --- グラフ描画関数（ハイライト追加版） ---
-function renderRTChart(d, rt_before, panelSol) {
-  try {
-    const std_panels = panelSol.plans.find(p=>p.name==='標準')?.panels || panelSol.basePanels;
-    const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => alpha_panel * PANEL_AREA * std_panels);
-    const T_after_std = rt_before.Aeq_values.map((Aeq_before, i) => {
-      const Aeq_total = Aeq_before + added_Aeq_std[i];
-      return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
-    });
-    const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt);
-
-    const ctx = document.getElementById('rtChart').getContext('2d');
-    if (window.myRtChart) window.myRtChart.destroy();
-
-    const isDark = document.documentElement.classList.contains('dark');
-    const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-    const labelColor = isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)';
-    const fillColor = 'rgba(255, 220, 150, 0.25)'; // ハイライト色（淡いオレンジ）
-
-    // --- Chart.js 描画 ---
-    window.myRtChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: FREQ_LABELS,
-        datasets: [
-          {
-            label: '現状（推定）',
-            data: rt_before.T_values.map(fmt2),
-            borderColor: 'rgb(107,114,128)',
-            backgroundColor: 'rgba(107,114,128,0.1)',
-            tension: 0.1
-          },
-          {
-            label: 'iwasemi設置後（標準）',
-            data: T_after_std.map(fmt2),
-            borderColor: 'rgb(16,185,129)',
-            backgroundColor: 'rgba(16,185,129,0.1)',
-            tension: 0.1,
-            borderWidth: 2
-          },
-          {
-            label: '目標残響時間',
-            data: T_target_line.map(fmt2),
-            borderColor: 'rgb(239,68,68)',
-            backgroundColor: 'rgba(239,68,68,0.1)',
-            fill: false,
-            borderDash: [5,5],
-            pointRadius: 0,
-            borderWidth: 1.5
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          y: {
-            title: { display: true, text: '残響時間 (s)', color: labelColor },
-            ticks: { color: labelColor, callback: v => fmt2(v)+'s' },
-            grid: { color: gridColor },
-            min: 0
-          },
-          x: {
-            title: { display: true, text: '周波数 (Hz)', color: labelColor },
-            ticks: { color: labelColor },
-            grid: { color: gridColor }
-          }
-        },
-        plugins: {
-          legend: { labels: { color: labelColor } },
-          annotation: {
-            annotations: {
-              // 500〜1000Hz の範囲を塗る
-              speechBand: {
-                type: 'box',
-                xMin: '500Hz',
-                xMax: '1000Hz',
-                backgroundColor: fillColor,
-                borderWidth: 0
-              },
-              // テロップ（中央に文字を表示）
-              speechLabel: {
-                type: 'label',
-                xValue: '750Hz',
-                yValue: Math.max(...rt_before.T_values) * 0.8,
-                content: ['人の会話音の中心周波数帯域', '500～1000Hz'],
-                font: {
-                  size: 14,
-                  weight: 'bold'
-                },
-                color: 'rgba(200,150,0,1)',
-                textAlign: 'center'
-              }
-            }
-          },
-          tooltip: {
-            callbacks: {
-              label: ctx => `${ctx.dataset.label}: ${ctx.formattedValue}s`
-            }
-          }
-        }
-      },
-      plugins: [Chart.registry.getPlugin('annotation')]
-    });
-
-    document.getElementById('rtChartWrap').style.display = 'block';
-  } catch (e) {
-    console.error('グラフ描画エラー:', e);
-    document.getElementById('rtChartWrap').style.display = 'none';
-  }
-}
-
+      try { renderRTChart(d, rt, panelSol); } catch(e){ console.warn('rt chart skipped:', e); }
 
       // TIPS
       const needsTip=d.features.some(x=>['transom','shared_plenum','grille'].includes(x));

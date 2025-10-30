@@ -924,10 +924,7 @@
         </div>`;
     }
 
-    /* ===== 導入事例（Excel反映・最小項目） =====
-       既存 CASES は詳細付き。今回ご指定の新規は URL のみ（link-only）で追補します。
-       一部、以前の誤URL「One&Co（シンガポール・Tanjong Pagar）」は候補から外し、新URLを採用します。
-    */
+    /* ===== 導入事例（Excel反映・最小項目） ===== */
     const CASES = [
       {company:'ヤンマーホールディングス株式会社',          place:'会議室', space:'会議室（密閉）',     problem:'音漏れ', effects:['集中力向上','音漏れの低減'], area:19,  rooms:1},
       {company:'文部科学省',                               place:'会議室', space:'会議室（密閉）',     problem:'反響',   effects:['会議の聞き取り','Web会議の聞き取り','話しやすさ'], area:9,   rooms:1},
@@ -1005,6 +1002,23 @@
       {company:'株式会社クレディセゾン'}
     ];
 
+    // === 追加: 業種マッピングとスコア加点（ユーザー情報に合わせて表示強化） ===
+    const CASE_INDUSTRY_MAP = {
+      'AlphaTheta': '製造', // 音響機器
+      'カラーキネティクス': '製造', // 照明
+      'マキナレコード': 'IT', // デジタル/音楽制作寄り
+      'Krafton': 'IT', // ゲーム
+      'Agit Global': '製造', // 製造
+      '直島建設': 'その他',
+      'British American Tobacco': '商業',
+      'One&Co': '商業', // シェアオフィス/商業施設
+      'クレディセゾン': '金融'
+    };
+    function getCaseIndustry(name){
+      const key = Object.keys(CASE_INDUSTRY_MAP).find(k=> name.includes(k));
+      return key ? CASE_INDUSTRY_MAP[key] : null;
+    }
+
     function getCaseImg(name){ const k=Object.keys(CASE_IMG).find(key=> name.includes(key)); return k?CASE_IMG[k]:''; }
     function getCaseUrl(name){ const k=Object.keys(CASE_URL).find(key=> name.includes(key)); return k?CASE_URL[k]:''; }
 
@@ -1051,6 +1065,15 @@
       if (typeof c.rooms==='number' && d.rooms){ const closeness=Math.max(0,1-Math.abs(c.rooms-d.rooms)/Math.max(1,d.rooms)); score+=5*closeness; }
       // link-only にはベース点を付与（URLがある場合）
       if ((!c.place && !c.space) || !c.problem){ score += getCaseUrl(c.company)?10:0; }
+
+      // ★追加加点：業種一致
+      const cInd = getCaseIndustry(c.company || '');
+      if (cInd && d.industry && cInd===d.industry) score += 10;
+
+      // ★追加加点：カテゴリー一致（オフィス/非オフィス）
+      if (d.category==='office' && (c.space?.startsWith('会議室') || /One&Co/.test(c.company||''))) score += 6;
+      if (d.category==='nonoffice' && (c.space==='スタジオ' || /工場|建設/.test(c.company||''))) score += 6;
+
       if (!getCaseUrl(c.company)) score*=0.95;
       return score;
     }
@@ -1062,7 +1085,7 @@
         ...CASES_LINKONLY.map(x=>({company:x.company, place:null, space:null, problem:null, effects:[], area:null, rooms:null}))
       ];
       return ALL
-        .map(c=>({...c,img:getCaseImg(c.company),url:getCaseUrl(c.company),_score:caseScore(d,S,rt,c)}))
+        .map(c=>({...c,img:getCaseImg(c.company),url:getCaseUrl(c.company),industry:getCaseIndustry(c.company),_score:caseScore(d,S,rt,c)}))
         .filter(c=>c.url) // 少なくともURLが存在するものを優先表示
         .sort((a,b)=>b._score-a._score)
         .slice(0,3);
@@ -1088,6 +1111,7 @@
                     ${c.place?`<span class="px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-700/60">${c.place}</span>`:''}
                     ${c.space?`<span class="px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-700/60">${c.space}</span>`:''}
                     ${c.problem?`<span class="px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-700/60">${c.problem}</span>`:''}
+                    ${c.industry?`<span class="px-1.5 py-0.5 rounded bg-emerald-200/70 dark:bg-emerald-900/40 text-emerald-900 dark:text-emerald-100">業種: ${c.industry}</span>`:''}
                   </div>
                   <div class="text-[11px] text-slate-500 mt-1">${(c.area??'—')}m² / ${c.rooms??'—'}室</div>
                 </div>
@@ -1212,17 +1236,17 @@
       }
     }
 
-    /* ========== グラフ描画：指定コードを使用 ========== */
-    // 周波数帯 (Hz) とラベル
+    /* ========== グラフ描画：指定コードを使用（不具合修正：カテゴリ軸にmin数値を設定しない） ========== */
     const FREQS = [250, 500, 1000, 2000, 4000, 8000];
     const FREQ_LABELS = FREQS.map(f => f + 'Hz');
-    // iwasemi パネル定数
     const PANEL_AREA = 0.03;
     const PANEL_ALPHA_FREQS = [0.05, 0.35, 0.76, 0.22, 0.11, 0.13];
     const PANEL_ALPHA_AVG = (PANEL_ALPHA_FREQS[1] + PANEL_ALPHA_FREQS[2]) / 2;
 
     function renderRTChart(d, rt_before, panelSol) {
       try {
+        const canvas = $('#rtChart');
+        if (!canvas) { $('#rtChartWrap').classList.add('hidden'); return; }
         const std_panels = panelSol.plans.find(p=>p.name==='標準')?.panels || panelSol.basePanels || 0;
         const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => alpha_panel * PANEL_AREA * std_panels);
         const T_after_std = (rt_before.Aeq_values||[]).map((Aeq_before, i) => {
@@ -1230,11 +1254,10 @@
           return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
         });
         const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt||0.6);
-        const ctx = $('#rtChart').getContext('2d');
+
+        const ctx = canvas.getContext('2d');
         if (window.myRtChart) window.myRtChart.destroy();
 
-        // Chart.js：xは数値軸に見せるため 250〜8000 の並びだが、x.min を調整し 300Hz付近から表示
-        // ラベルは 500/1000/2000/4000/8000 のみを等間隔で見せる
         window.myRtChart = new Chart(ctx, {
           type: 'line',
           data: {
@@ -1285,8 +1308,8 @@
                     const label = FREQ_LABELS[idx];
                     return ['500Hz','1000Hz','2000Hz','4000Hz','8000Hz'].includes(label) ? label : '';
                   }
-                },
-                min: 300 // 250Hz は半分見切れる表現
+                }
+                // ★カテゴリ軸に数値minを指定しない（描画エラーの原因になり得る）
               }
             },
             plugins: {
@@ -1298,18 +1321,18 @@
           },
           plugins: [{
             id:'conversation-band',
-            afterDraw(chart, args, p){
+            afterDraw(chart){
               const {ctx, chartArea, scales} = chart;
-              // 500〜1000Hz の帯（オレンジ半透明）
-              const idx500 = FREQ_LABELS.indexOf('500Hz');
-              const idx1000= FREQ_LABELS.indexOf('1000Hz');
+              const xLabel500 = '500Hz';
+              const xLabel1000 = '1000Hz';
+              const idx500 = FREQ_LABELS.indexOf(xLabel500);
+              const idx1000= FREQ_LABELS.indexOf(xLabel1000);
               if (idx500>=0 && idx1000>=0){
-                const x1 = scales.x.getPixelForValue(idx500);
-                const x2 = scales.x.getPixelForValue(idx1000);
+                const x1 = scales.x.getPixelForValue(xLabel500);
+                const x2 = scales.x.getPixelForValue(xLabel1000);
                 ctx.save();
                 ctx.fillStyle = 'rgba(234, 88, 12, 0.12)';
                 ctx.fillRect(x1, chartArea.top, (x2-x1), chartArea.bottom - chartArea.top);
-                // テロップ（帯の中央に描画）
                 const xm = (x1+x2)/2;
                 ctx.fillStyle = 'rgba(234,88,12,0.9)';
                 ctx.font = '12px "Noto Sans JP", sans-serif';
@@ -1385,7 +1408,7 @@
       if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetail(d, panelSol, primaryKey);
       renderNotes(primaryKey);
 
-      // 事例マッチング（通常のみ）
+      // 事例マッチング（通常のみ）— 業種・カテゴリも加味
       const matchedCases = selectCaseStudies(d, S, rt);
       renderCaseStudies(matchedCases);
 

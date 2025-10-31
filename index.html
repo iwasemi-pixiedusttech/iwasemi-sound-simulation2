@@ -17,15 +17,14 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['"Noto Sans JP"','"Noto Sans"','ui-sans-serif','system-ui',
-                   '-apple-system','"Hiragino Kaku Gothic ProN"','Meiryo','sans-serif']
+            sans: ['"Noto Sans JP"','"Noto Sans"','ui-sans-serif','system-ui','-apple-system','"Hiragino Kaku Gothic ProN"','Meiryo','sans-serif']
           }
         }
       }
     }
   </script>
 
-  <!-- Chart.js（グラフで使用） -->
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
@@ -43,13 +42,25 @@
     .tips-btn.gray{background:#e2e8f0;color:#0b1b26}
 
     /* TELECUBE 画像（全体が入る・見切れ防止） */
-    .telecube-img{
-      width:100%; height:280px; object-fit:contain;
-      background:#0b1220; border-radius:.75rem;
-    }
-    @media (min-width:1024px){
-      .telecube-img{ height:320px; }
-    }
+    .telecube-img{width:100%; height:280px; object-fit:contain; background:#0b1220; border-radius:.75rem;}
+    @media (min-width:1024px){ .telecube-img{ height:320px; } }
+
+    /* ---- Compact Multi-Select (dropdown-like) ---- */
+    .ms-wrap{position:relative}
+    .ms-btn{width:100%;display:flex;align-items:center;justify-content:space-between;gap:.5rem;
+      padding:.5rem .75rem;border-radius:.75rem;border:1px solid var(--ms-bd,#cbd5e1);
+      background:transparent}
+    .dark .ms-btn{--ms-bd:#334155}
+    .ms-menu{position:absolute;inset:auto 0 auto 0;top:calc(100% + .25rem);z-index:50;
+      background:var(--ms-bg,#fff);border:1px solid var(--ms-bd,#cbd5e1);border-radius:.75rem;
+      max-height:14rem;overflow:auto;box-shadow:0 10px 20px rgba(2,6,23,.2);display:none}
+    .dark .ms-menu{--ms-bg:#0f172a;--ms-bd:#334155}
+    .ms-item{display:flex;align-items:center;gap:.5rem;width:100%;padding:.5rem .75rem;text-align:left}
+    .ms-item:hover{background:rgba(2,6,23,.06)} .dark .ms-item:hover{background:rgba(255,255,255,.06)}
+    .ms-chip{display:inline-flex;align-items:center;gap:.25rem;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.35);
+      color:#065f46;border-radius:.75rem;padding:.125rem .5rem;font-size:.75rem}
+    .dark .ms-chip{color:#bbf7d0}
+    .ms-caret{margin-left:auto;opacity:.65}
   </style>
 </head>
 <body class="font-sans bg-slate-50 text-slate-900 selection:bg-emerald-200/60 dark:bg-slate-900 dark:text-slate-50">
@@ -160,18 +171,21 @@
       <section class="p-4 md:p-6 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
         <h2 class="text-lg font-semibold mb-4">2) 空間の基本情報</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label class="block"><span class="text-sm">プロジェクト種別</span>
+          <label class="block">
+            <span class="text-sm">プロジェクト種別</span>
             <select name="project" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option>移転</option><option>改修</option><option selected>既存</option>
             </select>
           </label>
-          <label class="block"><span class="text-sm">空間カテゴリー</span>
+          <label class="block">
+            <span class="text-sm">空間カテゴリー</span>
             <select name="category" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option value="office">オフィス</option>
               <option value="nonoffice">オフィス以外（工場/学校/図書館/商業/スタジオ等）</option>
             </select>
           </label>
-          <label class="block"><span class="text-sm">空間タイプ</span>
+          <label class="block">
+            <span class="text-sm">空間タイプ</span>
             <select name="spaceType" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option value="meeting_closed">会議室（密閉）</option>
               <option value="meeting_transom">会議室（欄間オープン）</option>
@@ -186,8 +200,9 @@
           </label>
 
           <!-- 利用用途（複数選択可） -->
-          <label class="block"><span class="text-sm">利用用途（複数選択可）</span>
-            <select name="use" multiple size="8" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
+          <label class="block">
+            <span class="text-sm">利用用途（複数選択可）</span>
+            <select name="use" multiple class="mt-1 w-full ms-native">
               <option value="meeting_multi">会議（複数人）</option>
               <option value="meeting_1to1">会議（1対1/少人数）</option>
               <option value="meeting_web">会議（Webメイン）</option>
@@ -202,27 +217,27 @@
               <option value="music">音楽鑑賞</option>
               <option value="stream">配信・収録</option>
             </select>
-            <div class="text-[11px] text-slate-500 mt-1">※ Ctrl/Cmd または Shift で複数選択</div>
           </label>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <label class="block"><span class="text-sm">騒音源（複数選択可）</span>
-            <select name="source" multiple size="3" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
+          <label class="block">
+            <span class="text-sm">騒音源（複数選択可）</span>
+            <select name="source" multiple class="mt-1 w-full ms-native">
               <option value="speech">人の声</option>
               <option value="machine">機械音</option>
               <option value="invasion_ext">外部からの音の侵入</option>
             </select>
           </label>
-
-          <label class="block"><span class="text-sm">従業員の声（うるささ）</span>
+          <label class="block">
+            <span class="text-sm">従業員の声（うるささ）</span>
             <select name="complaint" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option value="low">低</option><option value="mid" selected>中</option><option value="high">高</option>
             </select>
           </label>
-
-          <label class="block"><span class="text-sm">既存対策（複数選択可）</span>
-            <select name="measure" multiple size="4" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
+          <label class="block">
+            <span class="text-sm">既存対策（複数選択可）</span>
+            <select name="measure" multiple class="mt-1 w-full ms-native">
               <option value="partition">パーティション</option>
               <option value="absorption">吸音パネル</option>
               <option value="masking">サウンドマスキング</option>
@@ -358,19 +373,17 @@
           </label>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <label class="block"><span class="text-sm">特徴（複数選択可）</span>
-            <select name="feature" multiple size="7" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
-              <option value="transom">欄間オープン</option>
-              <option value="shared_plenum">共有天井裏（隣室と連続）</option>
-              <option value="grille">ガラリ／換気開口あり</option>
-              <option value="gap_door_bottom">ドア下の隙間</option>
-              <option value="gap_frame">枠まわりの隙間</option>
-              <option value="gap_penetration">貫通部の隙間</option>
-              <option value="gap_duct">ダクト等の隙間</option>
-            </select>
-            <div class="text-[11px] text-slate-500 mt-1">※ Ctrl/Cmd または Shift で複数選択</div>
-          </label>
+        <div class="mt-4">
+          <span class="text-sm block mb-1">特徴（複数選択可）</span>
+          <select name="feature" multiple class="w-full ms-native">
+            <option value="transom">欄間オープン</option>
+            <option value="shared_plenum">共有天井裏（隣室と連続）</option>
+            <option value="grille">ガラリ／換気開口あり</option>
+            <option value="gap_door_bottom">ドア下の隙間</option>
+            <option value="gap_frame">枠まわりの隙間</option>
+            <option value="gap_penetration">貫通部の隙間</option>
+            <option value="gap_duct">ダクト等の隙間</option>
+          </select>
         </div>
       </section>
 
@@ -378,39 +391,39 @@
       <section class="md:col-span-2 p-4 md:p-6 rounded-2xl bg-white dark:bg-slate-800 shadow-sm">
         <h2 class="text-lg font-semibold mb-4">期待する効果・制約</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label class="block"><span class="text-sm">期待する効果（複数選択）</span>
-            <select name="effect" multiple size="6" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent" aria-describedby="effectsHelp">
+          <label class="block">
+            <span class="text-sm">期待する効果（複数選択可）</span>
+            <select name="effect" multiple class="mt-1 w-full ms-native">
               <option value="clarity_meeting">会議の聞き取り</option>
               <option value="clarity_web">Web会議の聞き取り</option>
               <option value="speaking">話しやすさ</option>
               <option value="focus">集中力向上</option>
               <option value="leakage">音漏れの低減</option>
-              <option value="comfort">快適性・満足度</option>
-              <option value="productivity">生産性アップ</option>
-              <option value="brand">ブランド価値</option>
-              <option value="innov">先進的オフィスイメージ</option>
             </select>
-            <div id="effectsHelp" class="text-[11px] text-slate-500 mt-1">※ Ctrl/Cmd または Shift で複数選択</div>
-            <div id="effectsError" class="text-xs text-red-600 mt-1 hidden">「期待する効果」はどれか1つ以上選択してください。</div>
           </label>
-
-          <label class="block"><span class="text-sm">改修許容（施工可否）</span>
+          <label class="block">
+            <span class="text-sm">改修許容（施工可否）</span>
             <select name="work" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option value="night">夜間可</option><option value="weekend">週末のみ</option><option value="inhours">営業時間内のみ</option>
             </select>
           </label>
-
-          <label class="block"><span class="text-sm">完全遮音（音漏れゼロ）希望</span>
+          <label class="block">
+            <span class="text-sm">完全遮音（音漏れゼロ）希望</span>
             <select name="zeroLeak" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option value="no">いいえ</option><option value="yes">はい</option>
             </select>
           </label>
         </div>
-
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <label class="block md:col-span-1"><span class="text-sm">自己評価：現状の音環境（0=悪い〜10=良い）</span>
+          <label class="block md:col-span-1">
+            <span class="text-sm">自己評価：現状の音環境（0=悪い〜10=良い）</span>
             <input name="selfScore" type="number" min="0" max="10" value="5" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent"/>
           </label>
+        </div>
+
+        <!-- 効果が未選択のときのエラー表示 -->
+        <div id="effectsError" class="text-xs text-red-600 mt-2 hidden">
+          「期待する効果」はどれか1つ以上選択してください。
         </div>
       </section>
 
@@ -449,7 +462,7 @@
       <!-- 5) TELECUBE 参考事例（TELECUBE時のみ表示） -->
       <div id="telecubeWrap" class="mt-6"></div>
 
-      <!-- 6) 残響時間グラフ -->
+      <!-- 6) 残響時間グラフ（注意・前提の直前に配置） -->
       <div id="rtChartWrap" class="mt-6 hidden">
         <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
           <div class="text-base font-semibold mb-2">残響時間 比較（オクターブバンド）</div>
@@ -499,6 +512,7 @@
     /* ========== helpers ========== */
     const $ = (sel, el=document)=> el.querySelector(sel);
     const $$ = (sel, el=document)=> Array.from(el.querySelectorAll(sel));
+    const enc = (s)=> encodeURIComponent(s||'');
     const yen = (n)=> '¥' + (Math.round(n)||0).toLocaleString('ja-JP');
     const fmt2 = (n)=> (Math.round((n??0)*100)/100).toFixed(2);
 
@@ -516,23 +530,19 @@
 
     // Progress（効果グループも1ユニットとして加点）
     const formEl = $('#diagForm'); const progressBar = $('#progressBar');
-
-    // ★ 複数選択/チェックボックス 両対応の取得
-    function getValues(name){
-      const el = formEl.elements[name];
-      if(!el) return [];
-      if (el instanceof HTMLSelectElement) {
-        if (el.multiple) return Array.from(el.selectedOptions).map(o=>o.value);
-        return [el.value];
+    function getMulti(name){
+      const sel = formEl.elements[name];
+      if (!sel) return [];
+      if (sel instanceof HTMLSelectElement && sel.multiple) {
+        return Array.from(sel.selectedOptions).map(o=>o.value);
       }
-      // fallback: チェックボックス/ラジオ群
-      return $$(`input[name="${name}"]:checked`, formEl).map(i=>i.value);
+      // fallback（念のため）
+      return $$(`select[name='${name}'] option:checked`, formEl).map(o=>o.value);
     }
-
     function updateProgress(){
       const req = $$('input[required], select[required]', formEl);
       const filled = req.filter(i => i.value && i.value.trim() !== '' && i.checkValidity());
-      const effectChecked = getValues('effect').length > 0;
+      const effectChecked = getMulti('effect').length > 0;
       const total = req.length + 1; // +1 = 効果グループ
       const done  = filled.length + (effectChecked ? 1 : 0);
       const p = total ? Math.round((done/total)*100) : 100;
@@ -546,7 +556,7 @@
     function showTips(opts={}){ if(opts.transom){ $('#tipsExtra').innerHTML='欄間オープンの場合でも、壁面が硬質だと室内が反響しやすくなります。<strong>吸音</strong>で響きを抑えると回り込み軽減に寄与する場合があります。'; } else { $('#tipsExtra').textContent=''; } $('#tipsOverlay').style.display='block'; }
     function hideTips(){ $('#tipsOverlay').style.display='none'; }
 
-    // Collect
+    // Collect（multi=select対応）
     function collect(){
       const fd = new FormData(formEl);
       return {
@@ -557,14 +567,14 @@
         agentCompany: fd.get('agentCompany')||'', agentPerson: fd.get('agentPerson')||'', agentBranch: fd.get('agentBranch')||'', agentEmail: fd.get('agentEmail')||'',
         // 空間
         project: fd.get('project')||'既存', category: fd.get('category')||'office', spaceType: fd.get('spaceType')||'meeting_closed',
-        uses: getValues('use'), sources: getValues('source'), complaint: fd.get('complaint')||'mid', measures: getValues('measure'),
+        uses: getMulti('use'), sources: getMulti('source'), complaint: fd.get('complaint')||'mid', measures: getMulti('measure'),
         // 構成
         area: Number(fd.get('area')||0), rooms: Number(fd.get('rooms')||1), ceilHeight: fd.get('ceilHeight')||'2_5_3_0',
         walls: [fd.get('wall1')||'gypsum', fd.get('wall2')||'gypsum', fd.get('wall3')||'gypsum', fd.get('wall4')||'gypsum'],
         floor: fd.get('floor')||'carpet', ceiling: fd.get('ceiling')||'pb', door: fd.get('door')||'wood_solid', doorSeal: fd.get('doorSeal')||'gasket',
-        glazing: fd.get('glazing')||'single', features: getValues('feature'),
+        glazing: fd.get('glazing')||'single', features: getMulti('feature'),
         // 効果・制約
-        effects: getValues('effect'), work: fd.get('work')||'night', zeroLeak: fd.get('zeroLeak')==='yes', selfScore: Number(fd.get('selfScore')||5)
+        effects: getMulti('effect'), work: fd.get('work')||'night', zeroLeak: fd.get('zeroLeak')==='yes', selfScore: Number(fd.get('selfScore')||5)
       };
     }
 
@@ -588,14 +598,13 @@
         }
       });
 
-      // 4) 効果：どれか1つ以上
-      const effectEl = formEl.elements['effect'];
-      const effectChecked = getValues('effect').length > 0;
+      // 4) 効果：どれか1つ以上（multi-select）
+      const effectsEl = formEl.elements['effect'];
+      const effectChecked = getMulti('effect').length > 0;
       const effectsError = $('#effectsError');
-      setInvalid(effectEl, !effectChecked);
       if(!effectChecked){
         effectsError?.classList.remove('hidden');
-        missing.push(effectEl || effectsError);
+        missing.push(effectsEl || effectsError);
       }else{
         effectsError?.classList.add('hidden');
       }
@@ -650,7 +659,7 @@
       const T500 = 0.161 * V / Math.max(0.001, Aeq500);
       const T1000= 0.161 * V / Math.max(0.001, Aeq1000);
 
-      // グラフ用（500/1000からの簡易補間）
+      // グラフ用：6帯域の簡易Aeq/T（500/1000からの推定）
       const freqs=[250,500,1000,2000,4000,8000];
       const Aeq_values=freqs.map(f=>{
         if(f===500) return Aeq500;
@@ -662,7 +671,7 @@
       return { V,A,H,s,wallAreas,floorArea,ceilArea,Aeq500,Aeq1000,T500,T1000, Aeq_values, T_values };
     }
 
-    // Scores（変更なし）
+    // Scores
     function scoreAbs(d, rt){
       if (d.spaceType==='booth_tel') return null;
       const Ttgt = rtTarget(d.spaceType, d.uses);
@@ -703,7 +712,7 @@
       return Math.max(0, Math.round(s));
     }
 
-    /* ========== iwasemi 枚数/見積（変更なし） ========== */
+    /* ========== iwasemi 枚数（表ベース補間） ========== */
     const PANEL_ANCHORS=[
       {a:5,p:50},{a:10,p:100},{a:15,p:150},{a:20,p:190},{a:25,p:230},{a:30,p:270},
       {a:40,p:350},{a:50,p:430},{a:60,p:500},{a:80,p:640},{a:100,p:770}
@@ -732,7 +741,7 @@
         plans:[{name:'標準', panels:totalStd, bom:std.bom, subtotal:std.subtotal},{name:'強め', panels:totalPro, bom:pro.bom, subtotal:pro.subtotal}] };
     }
 
-    /* ========== Recommend/Render（変更なし） ========== */
+    /* ========== Recommend（文章） ========== */
     function recommend(d, S, rt){
       const list=[]; const ratio=((rt.T500+rt.T1000)/2)/rtTarget(d.spaceType,d.uses); const {any}=isolationIndicators(d);
       const TEXT={
@@ -773,6 +782,7 @@
       return list.slice(0,3).sort((a,b)=>b.score-a.score);
     }
 
+    /* ========== Render ========== */
     function clearResult(){
       $('#proposalSummary').innerHTML=''; $('#evidenceWrap').innerHTML='';
       $('#recommendWrap').innerHTML=''; $('#iwasemiWrap').innerHTML='';
@@ -940,7 +950,7 @@
         </div>`;
     }
 
-    /* ===== 導入事例データ（省略なし：元のまま） ===== */
+    /* ===== 事例（既存＋追加） ===== */
     const CASES = [
       {company:'ヤンマーホールディングス株式会社',          place:'会議室', space:'会議室（密閉）',     problem:'音漏れ', effects:['集中力向上','音漏れの低減'], area:19,  rooms:1},
       {company:'文部科学省',                               place:'会議室', space:'会議室（密閉）',     problem:'反響',   effects:['会議の聞き取り','Web会議の聞き取り','話しやすさ'], area:9,   rooms:1},
@@ -963,7 +973,7 @@
       '小野測器': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2388x1321_v-frms_webp_c232231e-3823-470b-9090-e72e25eb6e1c.png',
       'マルニ':   'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-934x649_v-fs_webp_95193a5e-061a-4636-8c33-235b921e0e61.jpg',
       'アストン': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2400x1600_v-frms_webp_9ebd7a93-0b96-4f2e-a7af-45ebeb6a0738.jpg',
-      '東京建物': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2400x1601_v-frms_webp_89d08d5f-9d3-42aa-a86f-d5eda6b37341.jpg',
+      '東京建物': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2400x1601_v-frms_webp_89d08d5f-9ad3-42aa-a86f-d5eda6b37341.jpg',
       'ヤンマー': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2400x1601_v-frms_webp_27fb2553-22a6-4a7f-be6e-d28fe418a633.jpg',
       'パナソニック': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2400x1600_v-frms_webp_00ebe96d-5f99-4eb6-b787-25acb33066b0.jpg',
       'トヨタコネク': 'https://storage.googleapis.com/studio-cms-assets/projects/JpOLNkebaQ/s-2400x1600_v-frms_webp_e0ce5f6f-f1d2-4ae4-ada9-bae2514f1fab.jpg',
@@ -1012,9 +1022,9 @@
       {company:'One&Co'},
       {company:'株式会社クレディセゾン'}
     ];
+
     function getCaseImg(name){ const k=Object.keys(CASE_IMG).find(key=> name.includes(key)); return k?CASE_IMG[k]:''; }
     function getCaseUrl(name){ const k=Object.keys(CASE_URL).find(key=> name.includes(key)); return k?CASE_URL[k]:''; }
-
     function mapUserPlace(d){
       if (d.spaceType?.startsWith('booth')) return 'ブース';
       if (d.spaceType==='studio') return 'スタジオ';
@@ -1037,10 +1047,9 @@
       return Array.from(probs);
     }
     function mapEffectsJ(d){
-      const m = { clarity_meeting:'会議の聞き取り', clarity_web:'Web会議の聞き取り', speaking:'話しやすさ', focus:'集中力向上', leakage:'音漏れの低減', comfort:'快適性・満足度', productivity:'生産性アップ', brand:'ブランド価値', innov:'先進的オフィスイメージ' };
+      const m = { clarity_meeting:'会議の聞き取り', clarity_web:'Web会議の聞き取り', speaking:'話しやすさ', focus:'集中力向上', leakage:'音漏れの低減' };
       return (d.effects||[]).map(x=> m[x]).filter(Boolean);
     }
-
     function caseScore(d, S, rt, c){
       let score=0;
       const uSpace=mapUserSpace(d);
@@ -1058,7 +1067,6 @@
       if (!getCaseUrl(c.company)) score*=0.95;
       return score;
     }
-
     function selectCaseStudies(d,S,rt){
       const ALL = [
         ...CASES,
@@ -1070,7 +1078,6 @@
         .sort((a,b)=>b._score-a._score)
         .slice(0,3);
     }
-
     function renderCaseStudies(cases){
       const wrap = $('#caseWrap'); if (!wrap) return;
       if (!cases || !cases.length){ wrap.innerHTML=''; return; }
@@ -1127,7 +1134,92 @@
         </div>`;
     }
 
-    /* ========== グラフ描画（変更なし） ========== */
+    /* ========== Googleフォーム送信 ========== */
+    const GF_FORM_ID='1FAIpQLSf8Eo_j14pXA3mTRSt5tN_gQ0Py46cV-8Rd1ZBW7Nt9cltIpQ';
+    const GF_ENDPOINT=`https://docs.google.com/forms/d/e/${GF_FORM_ID}/formResponse`;
+    const ENTRY_MAP = {
+      company:'entry.633735891',
+      person:'entry.1897466872',
+      email:'entry.520438276',
+      pref:'entry.1016772262',
+
+      project:'entry.1643209832',
+      category:'entry.1456767678',
+      spaceType:'entry.875012016',
+      uses:'entry.829570765',
+      sources:'entry.1840420677',
+
+      area:'entry.1193986863',
+      rooms:'entry.1894381184',
+      ceilHeight:'entry.237126416',
+
+      wall1:'entry.713604363',
+      wall2:'entry.1601335444',
+      wall3:'entry.803869896',
+      wall4:'entry.784934428',
+
+      floor:'entry.402764184',
+      ceiling:'entry.665830996',
+      door:'entry.67943677',
+      doorSeal:'entry.901692185',
+      glazing:'entry.1003016767',
+      features:'entry.685782864',
+
+      industry:'entry.863972',
+      size:'entry.743322677',
+      timeline:'entry.335161338',
+      complaint:'entry.1013219285',
+
+      effects:'entry.127489878',
+      zeroLeak:'entry.363506085',
+      selfScore:'entry.1025555385',
+      S_abs:'entry.2144586639',
+      S_isl:'entry.23030069',
+      primaryKey:'entry.902891300',
+      topLabel:'entry.892698191',
+      topReason:'entry.447335823',
+      panels_std:'entry.1375581996',
+      panels_pro:'entry.267227546',
+      price_std:'entry.1883756001',
+      price_pro:'entry.382111843',
+      raw_json:'entry.1555376589',
+
+      agentCompany:'entry.1294566503',
+      agentPerson:'entry.2017082841',
+      agentEmail:'entry.1181916971',
+    };
+    function buildGoogleFormPayload(diag){
+      const d=diag.input, S=diag.scores, recs=diag.recommendations, panels=diag.panels, top=recs[0]||{key:'measure',label:'計測／トライアル',reason:'',score:0};
+      return {
+        company:d.company, person:d.person, email:d.email, pref:d.pref, project:d.project, category:d.category, spaceType:d.spaceType,
+        uses:d.uses.join(','), sources:d.sources.join(','), area:d.area, rooms:d.rooms, ceilHeight:d.ceilHeight,
+        wall1:d.walls[0], wall2:d.walls[1], wall3:d.walls[2], wall4:d.walls[3], floor:d.floor, ceiling:d.ceiling, door:d.door, doorSeal:d.doorSeal, glazing:d.glazing,
+        features:d.features.join(','),
+
+        industry:d.industry, size:d.size, timeline:d.timeline, complaint:d.complaint,
+        effects:d.effects.join(','), zeroLeak:d.zeroLeak?'yes':'no', selfScore:d.selfScore,
+
+        S_abs:S.S_abs??'NA', S_isl:S.S_isl??'NA', primaryKey:top.key, topLabel:top.label, topReason:top.reason,
+        panels_std: panels.plans.find(p=>p.name==='標準')?.panels||0, panels_pro: panels.plans.find(p=>p.name==='強め')?.panels||0,
+        price_std: panels.plans.find(p=>p.name==='標準')?.subtotal||0, price_pro: panels.plans.find(p=>p.name==='強め')?.subtotal||0,
+        raw_json: JSON.stringify(diag),
+
+        agentCompany:d.agentCompany, agentPerson:d.agentPerson, agentEmail:d.agentEmail,
+      };
+    }
+    async function postToGoogleForm(payload){
+      const norm=v=>Array.isArray(v)?v.join(','): (typeof v==='boolean'?(v?'yes':'no'):(v??''));
+      const params=new URLSearchParams(); for(const [k,eid] of Object.entries(ENTRY_MAP)){ if(k in payload) params.append(eid, norm(payload[k])); }
+      try{
+        await fetch(GF_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body:params.toString()});
+        return {ok:true,mode:'no-cors'};
+      }catch(e){
+        try{ const blob=new Blob([params.toString()],{type:'application/x-www-form-urlencoded;charset=UTF-8'}); if(navigator.sendBeacon(GF_ENDPOINT,blob)) return {ok:true,mode:'beacon'}; }catch(_){}
+        return {ok:false};
+      }
+    }
+
+    /* ========== グラフ描画（x軸/ラベル安定化） ========== */
     const FREQS = [250, 500, 1000, 2000, 4000, 8000];
     const FREQ_LABELS = FREQS.map(f => f + 'Hz');
     const PANEL_AREA = 0.03;
@@ -1150,79 +1242,49 @@
           data: {
             labels: FREQ_LABELS,
             datasets: [
-              {
-                label: '現状（推定）',
-                data: (rt_before.T_values||[]).map(v=>Number(fmt2(v))),
-                borderColor: 'rgb(107, 114, 128)',
-                backgroundColor: 'rgba(107, 114, 128, 0.1)',
-                fill: false,
-                tension: 0.1
-              },
-              {
-                label: 'iwasemi設置後（標準）',
-                data: T_after_std.map(v=>Number(fmt2(v))),
-                borderColor: 'rgb(16, 185, 129)',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                fill: false,
-                tension: 0.1,
-                borderWidth: 2
-              },
-              {
-                label: '目標残響時間',
-                data: T_target_line.map(v=>Number(fmt2(v))),
-                borderColor: 'rgb(239, 68, 68)',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                fill: false,
-                borderDash: [5, 5],
-                pointRadius: 0,
-                borderWidth: 1.5
-              }
+              {label: '現状（推定）', data: (rt_before.T_values||[]).map(v=>Number(fmt2(v))), fill:false, tension:0.1},
+              {label: 'iwasemi設置後（標準）', data: T_after_std.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
+              {label: '目標残響時間', data: T_target_line.map(v=>Number(fmt2(v))), fill:false, borderDash:[5,5], pointRadius:0, borderWidth:1.5}
             ]
           },
           options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive:true, maintainAspectRatio:false,
             scales: {
-              y: {
-                title: { display: true, text: '残響時間 (s)' },
-                ticks: { callback: (v)=>fmt2(v)+'s' },
-                min: 0
-              },
               x: {
-                title: { display: true, text: '周波数 (Hz)' },
-                ticks: {
-                  callback: (value, idx) => {
+                type:'category',
+                title:{display:true,text:'周波数 (Hz)'},
+                ticks:{
+                  callback: (value, idx)=> {
                     const label = FREQ_LABELS[idx];
                     return ['500Hz','1000Hz','2000Hz','4000Hz','8000Hz'].includes(label) ? label : '';
                   }
-                },
-                min: 300
+                }
+              },
+              y: {
+                title:{display:true,text:'残響時間 (s)'},
+                ticks:{ callback:(v)=>fmt2(v)+'s' },
+                min:0
               }
             },
-            plugins: {
-              legend: { labels: { } },
-              tooltip: {
-                callbacks: { label: (ctx)=>`${ctx.dataset.label}: ${ctx.formattedValue} s` }
-              }
+            plugins:{
+              legend:{labels:{}},
+              tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label}: ${ctx.formattedValue} s`}}
             }
           },
-          plugins: [{
-            id:'conversation-band',
+          plugins:[{
+            id:'conv-band',
             afterDraw(chart){
               const {ctx, chartArea, scales} = chart;
-              const idx500 = FREQ_LABELS.indexOf('500Hz');
-              const idx1000= FREQ_LABELS.indexOf('1000Hz');
-              if (idx500>=0 && idx1000>=0){
-                const x1 = scales.x.getPixelForValue(idx500);
-                const x2 = scales.x.getPixelForValue(idx1000);
+              const x1 = scales.x.getPixelForValue('500Hz');
+              const x2 = scales.x.getPixelForValue('1000Hz');
+              if (Number.isFinite(x1) && Number.isFinite(x2)){
                 ctx.save();
-                ctx.fillStyle = 'rgba(234, 88, 12, 0.12)';
-                ctx.fillRect(x1, chartArea.top, (x2-x1), chartArea.bottom - chartArea.top);
-                const xm = (x1+x2)/2;
-                ctx.fillStyle = 'rgba(234,88,12,0.9)';
-                ctx.font = '12px "Noto Sans JP", sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('人の会話音の中心周波数帯域 500〜1000Hz', xm, chartArea.top + 18);
+                ctx.fillStyle='rgba(234,88,12,0.12)';
+                ctx.fillRect(x1, chartArea.top, (x2-x1), chartArea.bottom-chartArea.top);
+                ctx.fillStyle='rgba(234,88,12,0.9)';
+                ctx.font='12px "Noto Sans JP", sans-serif';
+                ctx.textAlign='center';
+                ctx.fillText('人の会話音の中心周波数帯域 500〜1000Hz', (x1+x2)/2, chartArea.top+18);
                 ctx.restore();
               }
             }
@@ -1236,94 +1298,15 @@
       }
     }
 
-    /* ========== Googleフォーム連携（元のまま） ========== */
-    const GF_FORM_ID='1FAIpQLSf8Eo_j14pXA3mTRSt5tN_gQ0Py46cV-8Rd1ZBW7Nt9cltIpQ';
-    const GF_ENDPOINT=`https://docs.google.com/forms/d/e/${GF_FORM_ID}/formResponse`;
-    const ENTRY_MAP = {
-      company:'entry.633735891',
-      person:'entry.1897466872',
-      email:'entry.520438276',
-      pref:'entry.1016772262',
-      project:'entry.1643209832',
-      category:'entry.1456767678',
-      spaceType:'entry.875012016',
-      uses:'entry.829570765',
-      sources:'entry.1840420677',
-      area:'entry.1193986863',
-      rooms:'entry.1894381184',
-      ceilHeight:'entry.237126416',
-      wall1:'entry.713604363',
-      wall2:'entry.1601335444',
-      wall3:'entry.803869896',
-      wall4:'entry.784934428',
-      floor:'entry.402764184',
-      ceiling:'entry.665830996',
-      door:'entry.67943677',
-      doorSeal:'entry.901692185',
-      glazing:'entry.1003016767',
-      features:'entry.685782864',
-      industry:'entry.863972',
-      size:'entry.743322677',
-      timeline:'entry.335161338',
-      complaint:'entry.1013219285',
-      effects:'entry.127489878',
-      zeroLeak:'entry.363506085',
-      selfScore:'entry.1025555385',
-      S_abs:'entry.2144586639',
-      S_isl:'entry.23030069',
-      primaryKey:'entry.902891300',
-      topLabel:'entry.892698191',
-      topReason:'entry.447335823',
-      panels_std:'entry.1375581996',
-      panels_pro:'entry.267227546',
-      price_std:'entry.1883756001',
-      price_pro:'entry.382111843',
-      raw_json:'entry.1555376589',
-      agentCompany:'entry.1294566503',
-      agentPerson:'entry.2017082841',
-      agentEmail:'entry.1181916971',
-    };
-    function buildGoogleFormPayload(diag){
-      const d=diag.input, S=diag.scores, recs=diag.recommendations, panels=diag.panels, top=recs[0]||{key:'measure',label:'計測／トライアル',reason:'',score:0};
-      return {
-        company:d.company, person:d.person, email:d.email, pref:d.pref, project:d.project, category:d.category, spaceType:d.spaceType,
-        uses:d.uses.join(','), sources:d.sources.join(','), area:d.area, rooms:d.rooms, ceilHeight:d.ceilHeight,
-        wall1:d.walls[0], wall2:d.walls[1], wall3:d.walls[2], wall4:d.walls[3], floor:d.floor, ceiling:d.ceiling, door:d.door, doorSeal:d.doorSeal, glazing:d.glazing,
-        features:d.features.join(','),
-        industry:d.industry, size:d.size, timeline:d.timeline, complaint:d.complaint,
-        effects:d.effects.join(','), zeroLeak:d.zeroLeak?'yes':'no', selfScore:d.selfScore,
-        S_abs:S.S_abs??'NA', S_isl:S.S_isl??'NA', primaryKey:top.key, topLabel:top.label, topReason:top.reason,
-        panels_std: panels.plans.find(p=>p.name==='標準')?.panels||0, panels_pro: panels.plans.find(p=>p.name==='強め')?.panels||0,
-        price_std: panels.plans.find(p=>p.name==='標準')?.subtotal||0, price_pro: panels.plans.find(p=>p.name==='強め')?.subtotal||0,
-        raw_json: JSON.stringify(diag),
-        agentCompany:d.agentCompany, agentPerson:d.agentPerson, agentEmail:d.agentEmail,
-      };
-    }
-    async function postToGoogleForm(payload){
-      const norm=v=>Array.isArray(v)?v.join(','): (typeof v==='boolean'?(v?'yes':'no'):(v??''));
-      const params=new URLSearchParams(); for(const [k,eid] of Object.entries(ENTRY_MAP)){ if(k in payload) params.append(eid, norm(payload[k])); }
-      try{
-        await fetch(GF_ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body:params.toString()});
-        return {ok:true,mode:'no-cors'};
-      }catch(e){
-        try{ const blob=new Blob([params.toString()],{type:'application/x-www-form-urlencoded;charset=UTF-8'}); if(navigator.sendBeacon(GF_ENDPOINT,blob)) return {ok:true,mode:'beacon'}; }catch(_){}
-        return {ok:false};
-      }
-    }
-
-    /* ========== 診断メイン ========== */
-    function renderNotesAndGraph(d, recs, S, rt, panelSol, primaryKey){
-      if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetail(d, panelSol, primaryKey);
-      renderNotes(primaryKey);
-      if (d.spaceType!=='booth_tel'){ try { renderRTChart(d, rt, panelSol); } catch(e) { console.warn(e); } }
-    }
-
+    /* ========== Diagnose main ========== */
     async function diagnose(){
       if(!window.__autoPreview){
         if(!validateRequiredFields()){ clearResult(); return; }
       }
+
       const d=collect();
 
+      // 大容積ガード
       const V_LIMIT=250; const H=heightFromKey(d.ceilHeight); const V=Math.max(0.1,d.area)*H;
       if (V>V_LIMIT){
         clearResult();
@@ -1337,6 +1320,7 @@
         return;
       }
 
+      // TELECUBE
       if (d.spaceType==='booth_tel'){
         const recs=[{key:'absorption',label:'吸音（ブース内面）',priority:'高',score:50,reason:'ブース内で残響（音の響き）が強く声がこもりやすいため、ガラスや金属面に小型吸音パネルを分散配置することが効果的です。'}];
         const dummyRT={T500:null,T1000:null,Aeq500:null,Aeq1000:null,V:V,A:d.area,H:H, Aeq_values:[], T_values:[]};
@@ -1346,7 +1330,8 @@
         renderProposalSummary(d, recs, S, dummyRT, panelSol);
         renderEvidence(d, S, dummyRT);
         renderRecommendations(recs, panelSol, primaryKey);
-        renderNotesAndGraph(d, recs, S, dummyRT, panelSol, primaryKey);
+        renderIwasemiDetail(d, panelSol, primaryKey);
+        renderNotes(primaryKey);
         renderTelecubeGallery();
 
         const diag={input:d,scores:S,rt:dummyRT,recommendations:recs,panels:panelSol};
@@ -1356,6 +1341,7 @@
         return;
       }
 
+      // 通常ルート
       const rt=calcRT(d); const S={S_abs:scoreAbs(d,rt), S_isl:scoreIsl(d,rt)};
       const recs=recommend(d,S,rt); const primaryKey=recs[0]?.key||'absorption'; const panelSol=buildPanelSolutions(d, primaryKey, rt);
 
@@ -1363,10 +1349,15 @@
       renderProposalSummary(d, recs, S, rt, panelSol);
       renderEvidence(d, S, rt);
       renderRecommendations(recs, panelSol, primaryKey);
-      renderNotesAndGraph(d, recs, S, rt, panelSol, primaryKey);
+      if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetail(d, panelSol, primaryKey);
+      renderNotes(primaryKey);
 
+      // 事例
       const matchedCases = selectCaseStudies(d, S, rt);
       renderCaseStudies(matchedCases);
+
+      // グラフ
+      try { renderRTChart(d, rt, panelSol); } catch(e) { console.warn(e); }
 
       const diag={input:d,scores:S,rt,recommendations:recs,panels:panelSol};
       window.__diagResult=diag;
@@ -1378,14 +1369,78 @@
       window.location.hash='#result';
     }
 
+    // ===== Compact Multi-Select enhancer (空間タイプと同様のドロップダウン感) =====
+    function enhanceMultiSelect(sel){
+      if(!(sel instanceof HTMLSelectElement) || !sel.multiple) return;
+
+      const wrap = document.createElement('div'); wrap.className='ms-wrap';
+      const btn  = document.createElement('button'); btn.type='button'; btn.className='ms-btn';
+      const label= document.createElement('div'); label.className='flex flex-wrap gap-1 items-center min-h-[1.75rem]';
+      const caret= document.createElement('span'); caret.className='ms-caret'; caret.textContent='▾';
+      btn.append(label, caret);
+
+      const menu = document.createElement('div'); menu.className='ms-menu';
+      Array.from(sel.options).forEach((opt, idx)=>{
+        const item=document.createElement('button'); item.type='button'; item.className='ms-item';
+        const check=document.createElement('span'); check.textContent='✓'; check.style.visibility= opt.selected?'visible':'hidden';
+        const text=document.createElement('span'); text.textContent=opt.textContent;
+        item.append(check, text);
+        const sync = ()=>{ check.style.visibility = opt.selected?'visible':'hidden'; renderChips(); };
+        item.addEventListener('click', (e)=>{ e.preventDefault(); opt.selected=!opt.selected; sel.dispatchEvent(new Event('input', {bubbles:true})); sel.dispatchEvent(new Event('change', {bubbles:true})); sync(); });
+        menu.appendChild(item);
+      });
+
+      function renderChips(){
+        label.innerHTML='';
+        const selected = Array.from(sel.selectedOptions);
+        if(!selected.length){ const ph=document.createElement('span'); ph.className='text-slate-500 text-sm'; ph.textContent='選択してください'; label.appendChild(ph); return; }
+        selected.forEach(o=>{ const chip=document.createElement('span'); chip.className='ms-chip'; chip.textContent=o.textContent; label.appendChild(chip); });
+      }
+      renderChips();
+
+      // mount
+      sel.classList.add('hidden');
+      sel.parentNode.insertBefore(wrap, sel);
+      wrap.append(btn, menu, sel); // move select inside
+
+      // interactions
+      btn.addEventListener('click', ()=>{ menu.style.display = (menu.style.display==='block'?'none':'block'); });
+      document.addEventListener('click', (e)=>{ if(!wrap.contains(e.target)) menu.style.display='none'; });
+      // keyboard close
+      btn.addEventListener('keydown', e=>{ if(e.key==='Escape') menu.style.display='none'; });
+
+      // when native changes (programmatically)
+      sel.addEventListener('change', renderChips);
+    }
+
+    function enhanceAllMultiSelects(){
+      $$('select[multiple].ms-native', formEl).forEach(enhanceMultiSelect);
+    }
+
     // Events
     $('#diagnoseBtn').addEventListener('click', async()=>{ window.__autoPreview=false; await diagnose(); });
-    $('#resetBtn').addEventListener('click', ()=>{ formEl.reset(); updateProgress(); clearResult(); $('#effectsError')?.classList.add('hidden'); $$('input[required],select[required]').forEach(el=>setInvalid(el,false)); });
-    $('#downloadJson').addEventListener('click', ()=>{ const payload=window.__diagResult||{note:'先に「診断する」を押してください。'}; const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`iwasemi-diagnosis-${Date.now()}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); });
+    $('#resetBtn').addEventListener('click', ()=>{
+      formEl.reset(); updateProgress(); clearResult(); $('#effectsError')?.classList.add('hidden');
+      $$('input[required],select[required]').forEach(el=>setInvalid(el,false));
+      // re-render multiselect chips after reset
+      $$('select[multiple].ms-native').forEach(sel=>sel.dispatchEvent(new Event('change')));
+    });
+    $('#downloadJson').addEventListener('click', ()=>{
+      const payload=window.__diagResult||{note:'先に「診断する」を押してください。'};
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a');
+      a.href=url; a.download=`iwasemi-diagnosis-${Date.now()}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
     $('#printBtn').addEventListener('click', ()=>window.print());
 
     // Auto preview（送信しない）
-    window.addEventListener('DOMContentLoaded', async()=>{ try{ window.__autoPreview=true; await diagnose(); }catch(e){} });
+    window.addEventListener('DOMContentLoaded', async()=>{
+      try{
+        enhanceAllMultiSelects();
+        window.__autoPreview=true;
+        await diagnose();
+      }catch(e){}
+    });
   </script>
 </body>
 </html>

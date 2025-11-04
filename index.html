@@ -465,9 +465,9 @@
       <!-- 6) 残響時間グラフ（注意・前提の直前に配置） -->
       <div id="rtChartWrap" class="mt-6 hidden">
         <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <div class="text-base font-semibold mb-2">残響時間 比較（オクターブバンド）</div>
-          <div class="text-xs text-slate-500 mb-3">
-            現状と iwasemi 設置後（標準プラン）の推定残響時間を 500/1000/2000/4000/8000Hz で比較表示します。
+          <div class="text-base font-semibold mb-2">残響時間シミュレーション</div>
+          <div class="text-xs text-slate-500 mb-3" id="rtChartSummary">
+            目標：会議室の目安とする残響時間は <b>0.6秒</b> です（用途により自動補正）。
           </div>
           <div class="relative" style="height:340px">
             <canvas id="rtChart" aria-label="残響時間グラフ" role="img"></canvas>
@@ -788,6 +788,8 @@
       $('#recommendWrap').innerHTML=''; $('#iwasemiWrap').innerHTML='';
       $('#caseWrap').innerHTML=''; $('#telecubeWrap').innerHTML=''; $('#notesWrap').innerHTML='';
       $('#rtChartWrap').classList.add('hidden');
+      if (window.myRtChart) { try{ window.myRtChart.destroy(); }catch(e){} window.myRtChart=null; }
+      if (window.myRtChartInline) { try{ window.myRtChartInline.destroy(); }catch(e){} window.myRtChartInline=null; }
     }
     function cardExplainAbs(s){ if(s>=70)return'吸音材の導入が強く推奨されます（高残響）。'; if(s>=40)return'吸音導入で明瞭度の改善が期待できます。'; if(s>=12)return'軽微な吸音でも改善が見込めます。'; return'現状、吸音の必要性は小さいと推定されます。'; }
     function cardExplainIsl(s){ if(s>=60)return'遮音工事が主目的（欄間・共有天井・隙間等の経路対策）。'; if(s>=45)return'隙間封止等の簡易遮音と吸音の併用が有効です。'; if(s>=30)return'軽微な回り込み対策を検討してください。'; return'現状、遮音（漏れ/侵入）の優先度は高くありません。'; }
@@ -844,6 +846,22 @@
           ${contact}
         </div>`;
 
+      // ▼▼ ここに「残響時間シミュレーション」を差し込み ▼▼
+      if (rt && Array.isArray(rt.T_values) && rt.T_values.length){
+        $('#proposalSummary').insertAdjacentHTML('beforeend', `
+          <div id="rtChartInlineWrap" class="mt-4 p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div class="text-base font-semibold mb-2">残響時間シミュレーション</div>
+            <div class="text-xs text-slate-500 mb-3" id="rtChartInlineSummary">
+              目標：会議室の目安とする残響時間は <b>0.6秒</b> です（用途により自動補正）。
+            </div>
+            <div class="relative" style="height:280px">
+              <canvas id="rtChartInline" aria-label="残響時間グラフ（提案直下）" role="img"></canvas>
+            </div>
+          </div>
+        `);
+        try { renderRTChartInline(d, rt, panelSol); } catch(e){ console.warn(e); }
+      }
+
       const needTips = d.features.some(x=>['transom','shared_plenum','grille'].includes(x));
       if (needTips) {
         $('#proposalSummary').insertAdjacentHTML('beforeend', `
@@ -857,9 +875,10 @@
       }
     }
 
-    function renderEvidence(d,S,rt){
+    function renderEvidence(d,S,rt, recs=[], panelSol=null){ // 引数追加
       const L = (rt.T500==null? {line1:'残響：—（ブース製品のため参考）', line2:`吸音必要度 ${(S.S_abs??'—')} / 遮音必要度 ${(S.S_isl??'—')}（0〜100）`, line3:'回り込みの要因：—', explainRT:'', explainLeak:''} : evidenceLines(d,S,rt));
-      $('#evidenceWrap').innerHTML = `
+      
+      let card1_html = `
         <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
           <div class="text-sm text-slate-500 mb-1">① サマリ指標（0〜100）</div>
           <div class="grid grid-cols-1 gap-3">
@@ -875,21 +894,54 @@
             </div>
           </div>
           <div class="text-xs text-slate-500 mt-2">${d.company||'（未入力）'}・${d.person||''}／${d.rooms}室・${d.area}m²/室</div>
-        </div>
+        </div>`;
+      
+      let card2_html = `
         <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-          <div class="text-sm text-slate-500 mb-1">② 残響・目標</div>
-          <div class="text-sm">${L.line1}</div>
-          ${rt.T500==null?'':`<div class="text-xs text-slate-500 mt-2">500Hz=${fmt2(rt.T500)}s（Aeq=${fmt2(rt.Aeq500)}m²） / 1000Hz=${fmt2(rt.T1000)}s（Aeq=${fmt2(rt.Aeq1000)}m²）</div>`}
-          <div class="text-xs mt-2">${L.explainRT}</div>
-        </div>
-        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-          <div class="text-sm text-slate-500 mb-1">③ 侵入・回り込み</div>
+          <div class="text-sm text-slate-500 mb-1">② 侵入・回り込み</div>
           <div class="text-sm">${L.line3}</div>
           <div class="text-xs mt-2">${L.explainLeak}</div>
         </div>`;
+
+      let card3_html = '';
+      // 要望2：recsが1枚の場合、3枚目のカードとして evidenceWrap に描画
+      if (recs && recs.length === 1 && panelSol) {
+        const r = recs[0];
+        let priceHtml = `<span class="badge bg-white/60 dark:bg-slate-800/60">別途見積</span>`;
+        
+        // panelSol があり、plans 配列があることを確認
+        if (panelSol.plans && panelSol.plans.length >= 2) {
+          // 'absorption' または 'abs_plus_seal' のキーの場合
+          if (r.key === 'absorption' || r.key === 'abs_plus_seal') {
+            const std = panelSol.plans.find(p => p.name === '標準');
+            const pro = panelSol.plans.find(p => p.name === '強め');
+            if (std && pro) {
+              priceHtml = `${yen(std.subtotal)}〜${yen(pro.subtotal)} <span class="text-xs text-slate-500">（概算・税抜）</span>`;
+            }
+          }
+        }
+        
+        card3_html = `
+          <div class="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/60">
+            <div class="flex items-baseline justify-between mb-1">
+              <div class="text-base font-semibold">解決カテゴリ：${r.label} <span class="badge">${r.priority}</span></div>
+              <div class="text-xs text-slate-500">スコア：${Math.round(r.score)}</div>
+            </div>
+            <p class="text-sm text-slate-700 dark:text-slate-200">${r.reason}</p>
+            <div class="mt-2"><span class="text-xs text-slate-500">概算見積：</span><span class="text-base font-semibold tabular-nums">${priceHtml}</span></div>
+          </div>`;
+      }
+
+      $('#evidenceWrap').innerHTML = card1_html + card2_html + card3_html;
     }
 
     function renderRecommendations(recs, panelSol, primaryKey){
+      // 要望2：recsが1枚の場合は evidenceWrap に描画したので、ここでは描画しない
+      if (recs && recs.length === 1) {
+        $('#recommendWrap').innerHTML = '';
+        return;
+      }
+      // 以下、recs.length が 0 または 2以上 の場合
       $('#recommendWrap').innerHTML = recs.map(r=>{
         let priceHtml = `<span class="badge bg-white/60 dark:bg-slate-800/60">別途見積</span>`;
         if (r.key==='absorption' || r.key==='abs_plus_seal'){
@@ -1219,11 +1271,59 @@
       }
     }
 
-    /* ========== グラフ描画（x軸/ラベル安定化） ========== */
+    /* ========== グラフ描画 ========== */
     const FREQS = [250, 500, 1000, 2000, 4000, 8000];
     const FREQ_LABELS = FREQS.map(f => f + 'Hz');
     const PANEL_AREA = 0.03;
     const PANEL_ALPHA_FREQS = [0.05, 0.35, 0.76, 0.22, 0.11, 0.13];
+
+    function commonChartOptions(targetLine){
+      return {
+        responsive:true, maintainAspectRatio:false,
+        scales: {
+          x: {
+            type:'category', // Chart.js category scale（公式）
+            title:{display:true,text:'周波数 (Hz)'},
+            ticks:{
+              callback: (value, idx)=> {
+                const label = FREQ_LABELS[idx];
+                return ['500Hz','1000Hz','2000Hz','4000Hz','8000Hz'].includes(label) ? label : '';
+              }
+            }
+          },
+          y: {
+            title:{display:true,text:'残響時間 (s)'},
+            ticks:{ callback:(v)=>fmt2(v)+'s' },
+            min:0
+          }
+        },
+        plugins:{
+          legend:{labels:{}},
+          tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label}: ${ctx.formattedValue} s`}}
+        }
+      };
+    }
+
+    function convBandPlugin(){
+      return {
+        id:'conv-band',
+        afterDraw(chart){
+          const {ctx, chartArea, scales} = chart;
+          const x1 = scales.x.getPixelForValue('500Hz');
+          const x2 = scales.x.getPixelForValue('1000Hz');
+          if (Number.isFinite(x1) && Number.isFinite(x2)){
+            ctx.save();
+            ctx.fillStyle='rgba(234,88,12,0.12)';
+            ctx.fillRect(x1, chartArea.top, (x2-x1), chartArea.bottom-chartArea.top);
+            ctx.fillStyle='rgba(234,88,12,0.9)';
+            ctx.font='12px "Noto Sans JP", sans-serif';
+            ctx.textAlign='center';
+            ctx.fillText('人の会話音の中心周波数帯域 500〜1000Hz', (x1+x2)/2, chartArea.top+18);
+            ctx.restore();
+          }
+        }
+      };
+    }
 
     function renderRTChart(d, rt_before, panelSol) {
       try {
@@ -1235,8 +1335,7 @@
         });
         const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt||0.6);
         const ctx = $('#rtChart').getContext('2d');
-        if (window.myRtChart) window.myRtChart.destroy();
-
+        if (window.myRtChart) { try{ window.myRtChart.destroy(); }catch(e){} } // 既存インスタンス破棄（公式API）
         window.myRtChart = new Chart(ctx, {
           type: 'line',
           data: {
@@ -1247,54 +1346,53 @@
               {label: '目標残響時間', data: T_target_line.map(v=>Number(fmt2(v))), fill:false, borderDash:[5,5], pointRadius:0, borderWidth:1.5}
             ]
           },
-          options: {
-            responsive:true, maintainAspectRatio:false,
-            scales: {
-              x: {
-                type:'category',
-                title:{display:true,text:'周波数 (Hz)'},
-                ticks:{
-                  callback: (value, idx)=> {
-                    const label = FREQ_LABELS[idx];
-                    return ['500Hz','1000Hz','2000Hz','4000Hz','8000Hz'].includes(label) ? label : '';
-                  }
-                }
-              },
-              y: {
-                title:{display:true,text:'残響時間 (s)'},
-                ticks:{ callback:(v)=>fmt2(v)+'s' },
-                min:0
-              }
-            },
-            plugins:{
-              legend:{labels:{}},
-              tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label}: ${ctx.formattedValue} s`}}
-            }
-          },
-          plugins:[{
-            id:'conv-band',
-            afterDraw(chart){
-              const {ctx, chartArea, scales} = chart;
-              const x1 = scales.x.getPixelForValue('500Hz');
-              const x2 = scales.x.getPixelForValue('1000Hz');
-              if (Number.isFinite(x1) && Number.isFinite(x2)){
-                ctx.save();
-                ctx.fillStyle='rgba(234,88,12,0.12)';
-                ctx.fillRect(x1, chartArea.top, (x2-x1), chartArea.bottom-chartArea.top);
-                ctx.fillStyle='rgba(234,88,12,0.9)';
-                ctx.font='12px "Noto Sans JP", sans-serif';
-                ctx.textAlign='center';
-                ctx.fillText('人の会話音の中心周波数帯域 500〜1000Hz', (x1+x2)/2, chartArea.top+18);
-                ctx.restore();
-              }
-            }
-          }]
+          options: commonChartOptions(panelSol.Ttgt||0.6),
+          plugins:[convBandPlugin()]
         });
 
-        $('#rtChartWrap').classList.remove('hidden');
+        // サマリ（下部グラフ）
+        const tgt = panelSol.Ttgt||0.6;
+        $('#rtChartSummary').innerHTML =
+          `目標：会議室の目安とする残響時間は <b>0.6秒</b> です（今回の目標＝<b>${fmt2(tgt)}秒</b>）。`;
+
+        // $('#rtChartWrap').classList.remove('hidden'); // 要望1：下部グラフは表示しない
       } catch(e) {
         console.error('グラフの描画に失敗しました:', e);
         $('#rtChartWrap').classList.add('hidden');
+      }
+    }
+
+    function renderRTChartInline(d, rt_before, panelSol){
+      try{
+        const std_panels = panelSol.plans.find(p=>p.name==='標準')?.panels || panelSol.basePanels || 0;
+        const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => alpha_panel * PANEL_AREA * std_panels);
+        const T_after_std = (rt_before.Aeq_values||[]).map((Aeq_before, i) => {
+          const Aeq_total = Aeq_before + (added_Aeq_std[i]||0);
+          return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
+        });
+        const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt||0.6);
+        const ctx = $('#rtChartInline').getContext('2d');
+        if (window.myRtChartInline) { try{ window.myRtChartInline.destroy(); }catch(e){} }
+        window.myRtChartInline = new Chart(ctx, {
+          type:'line',
+          data:{
+            labels:FREQ_LABELS,
+            datasets:[
+              {label: '現状（推定）', data:(rt_before.T_values||[]).map(v=>Number(fmt2(v))), fill:false, tension:0.1},
+              {label: 'iwasemi設置後（標準）', data:T_after_std.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
+              {label: '目標残響時間', data:T_target_line.map(v=>Number(fmt2(v))), fill:false, borderDash:[5,5], pointRadius:0, borderWidth:1.5}
+            ]
+          },
+          options: commonChartOptions(panelSol.Ttgt||0.6),
+          plugins:[convBandPlugin()]
+        });
+
+        // サマリ（提案直下グラフ）
+        const tgt = panelSol.Ttgt||0.6;
+        $('#rtChartInlineSummary').innerHTML =
+          `目標：会議室の目安とする残響時間は <b>0.6秒</b> です（今回の目標＝<b>${fmt2(tgt)}秒</b>）。`;
+      }catch(e){
+        console.warn('inline chart error', e);
       }
     }
 
@@ -1328,8 +1426,8 @@
 
         clearResult();
         renderProposalSummary(d, recs, S, dummyRT, panelSol);
-        renderEvidence(d, S, dummyRT);
-        renderRecommendations(recs, panelSol, primaryKey);
+        renderEvidence(d, S, dummyRT, recs, panelSol); // 要望2：引数追加
+        renderRecommendations(recs, panelSol, primaryKey); // 要望2：recs=1なのでここは空になる
         renderIwasemiDetail(d, panelSol, primaryKey);
         renderNotes(primaryKey);
         renderTelecubeGallery();
@@ -1347,8 +1445,8 @@
 
       clearResult();
       renderProposalSummary(d, recs, S, rt, panelSol);
-      renderEvidence(d, S, rt);
-      renderRecommendations(recs, panelSol, primaryKey);
+      renderEvidence(d, S, rt, recs, panelSol); // 要望2：引数追加
+      renderRecommendations(recs, panelSol, primaryKey); // 要望2：recs=1の場合は空になる
       if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetail(d, panelSol, primaryKey);
       renderNotes(primaryKey);
 
@@ -1356,8 +1454,8 @@
       const matchedCases = selectCaseStudies(d, S, rt);
       renderCaseStudies(matchedCases);
 
-      // グラフ
-      try { renderRTChart(d, rt, panelSol); } catch(e) { console.warn(e); }
+      // グラフ（下部も表示：詳細確認用）
+      // try { renderRTChart(d, rt, panelSol); } catch(e) { console.warn(e); } // 要望1：下部グラフの呼び出しを削除
 
       const diag={input:d,scores:S,rt,recommendations:recs,panels:panelSol};
       window.__diagResult=diag;
@@ -1369,7 +1467,7 @@
       window.location.hash='#result';
     }
 
-    // ===== Compact Multi-Select enhancer (空間タイプと同様のドロップダウン感) =====
+    // ===== Compact Multi-Select enhancer =====
     function enhanceMultiSelect(sel){
       if(!(sel instanceof HTMLSelectElement) || !sel.multiple) return;
 
@@ -1444,3 +1542,4 @@
   </script>
 </body>
 </html>
+

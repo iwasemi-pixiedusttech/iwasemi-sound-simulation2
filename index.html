@@ -857,6 +857,10 @@
             <div class="relative" style="height:280px">
               <canvas id="rtChartInline" aria-label="残響時間グラフ（提案直下）" role="img"></canvas>
             </div>
+            <!-- ▼▼ 説明文用のコンテナを追加 ▼▼ -->
+            <div id="rtChartInlineDescription" class="mt-4 text-sm text-slate-700 dark:text-slate-200 space-y-2">
+              <!-- ここにJSから計算結果が挿入されます -->
+            </div>
           </div>
         `);
         try { renderRTChartInline(d, rt, panelSol); } catch(e){ console.warn(e); }
@@ -1391,6 +1395,37 @@
         const tgt = panelSol.Ttgt||0.6;
         $('#rtChartInlineSummary').innerHTML =
           `目標：会議室の目安とする残響時間は <b>0.6秒</b> です（今回の目標＝<b>${fmt2(tgt)}秒</b>）。`;
+
+        // ▼▼ ここからが追加ロジック ▼▼
+
+        // 500Hz (idx 1) と 1000Hz (idx 2) の値を取得
+        // rt_before.T_values が存在し、長さが3以上あることを確認
+        const T_500_before = (rt_before.T_values && rt_before.T_values.length > 1) ? rt_before.T_values[1] : 0;
+        const T_1000_before = (rt_before.T_values && rt_before.T_values.length > 2) ? rt_before.T_values[2] : 0;
+        const T_avg_before = (T_500_before + T_1000_before) / 2;
+
+        const T_500_after = (T_after_std && T_after_std.length > 1) ? T_after_std[1] : 0;
+        const T_1000_after = (T_after_std && T_after_std.length > 2) ? T_after_std[2] : 0;
+        const T_avg_after_std = (T_500_after + T_1000_after) / 2;
+
+        let reduction_percent = 0;
+        if (T_avg_before > 0.001) { // ゼロ除算を避ける
+          reduction_percent = ((T_avg_before - T_avg_after_std) / T_avg_before) * 100;
+        }
+
+        const descWrap = $('#rtChartInlineDescription');
+        if (descWrap) {
+          descWrap.innerHTML = `
+            <div class="font-semibold text-base mb-1">【シミュレーション結果】</div>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>通常会議室の500～1000Hzにおける平均残響時間は0.6秒程度となります。</li>
+              <li>今回の環境下では、人の声の帯域にあたる500～1000Hzにおける平均残響時間が <b class="font-bold text-red-600 dark:text-red-400">${fmt2(T_avg_before)}秒</b> と平均を大きく超える数値でした。</li>
+              <li>iwasemiを <b class="font-bold text-red-600 dark:text-red-400">${std_panels}枚</b> 設置した場合、 500～1,000Hzにおける平均残響時間 <b class="font-bold text-red-600 dark:text-red-400">${fmt2(T_avg_after_std)}秒</b> まで減少し、減少率 <b class="font-bold text-red-600 dark:text-red-400">${Math.round(reduction_percent)}％</b> の予測です。</li>
+            </ul>
+          `;
+        }
+        // ▲▲ 追加ロジックここまで ▲▲
+
       }catch(e){
         console.warn('inline chart error', e);
       }
@@ -1542,4 +1577,3 @@
   </script>
 </body>
 </html>
-

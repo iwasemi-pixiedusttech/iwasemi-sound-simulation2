@@ -328,7 +328,7 @@
           <label class="block"><span class="text-sm">床材</span>
             <select name="floor" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300/70 dark:border-slate-700 bg-transparent">
               <option value="carpet">タイルカーペット</option>
-              <option value="wood">フローリング</option>
+              <option value="wood">フローリング</</option>
               <option value="pvc">塩ビシート（PVC）</option>
               <option value="tile_stone">タイル・石材</option>
               <option value="unknown">不明</option>
@@ -421,7 +421,6 @@
           </label>
         </div>
 
-        <!-- 効果が未選択のときのエラー表示 -->
         <div id="effectsError" class="text-xs text-red-600 mt-2 hidden">
           「期待する効果」はどれか1つ以上選択してください。
         </div>
@@ -453,7 +452,7 @@
       <!-- 2) 詳細レコメンド -->
       <div id="recommendWrap" class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4"></div>
 
-      <!-- 3) iwasemi見積（詳細） -->
+      <!-- 3) iwasemi見積（詳細：3製品） -->
       <div id="iwasemiWrap" class="mt-6"></div>
 
       <!-- 4) 近い導入事例（※TELECUBE時は非表示） -->
@@ -462,7 +461,7 @@
       <!-- 5) TELECUBE 参考事例（TELECUBE時のみ表示） -->
       <div id="telecubeWrap" class="mt-6"></div>
 
-      <!-- 6) 残響時間グラフ（注意・前提の直前に配置） -->
+      <!-- 6) 残響時間グラフ（詳細版は非表示のまま） -->
       <div id="rtChartWrap" class="mt-6 hidden">
         <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
           <div class="text-base font-semibold mb-2">残響時間シミュレーション</div>
@@ -528,7 +527,7 @@
     // Toast
     function toast(msg, ok=true){ const t=$('#toast'); t.className='toast '+(ok?'ok':'ng'); t.textContent=msg; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3200); }
 
-    // Progress（効果グループも1ユニットとして加点）
+    // Progress
     const formEl = $('#diagForm'); const progressBar = $('#progressBar');
     function getMulti(name){
       const sel = formEl.elements[name];
@@ -536,7 +535,6 @@
       if (sel instanceof HTMLSelectElement && sel.multiple) {
         return Array.from(sel.selectedOptions).map(o=>o.value);
       }
-      // fallback（念のため）
       return $$(`select[name='${name}'] option:checked`, formEl).map(o=>o.value);
     }
     function updateProgress(){
@@ -556,7 +554,7 @@
     function showTips(opts={}){ if(opts.transom){ $('#tipsExtra').innerHTML='欄間オープンの場合でも、壁面が硬質だと室内が反響しやすくなります。<strong>吸音</strong>で響きを抑えると回り込み軽減に寄与する場合があります。'; } else { $('#tipsExtra').textContent=''; } $('#tipsOverlay').style.display='block'; }
     function hideTips(){ $('#tipsOverlay').style.display='none'; }
 
-    // Collect（multi=select対応）
+    // Collect
     function collect(){
       const fd = new FormData(formEl);
       return {
@@ -578,7 +576,7 @@
       };
     }
 
-    // ===== バリデーション（必須条件） =====
+    // ===== バリデーション =====
     function setInvalid(el, on){
       if(!el) return;
       el.classList.toggle('border-red-500', !!on);
@@ -586,8 +584,6 @@
     }
     function validateRequiredFields(){
       const missing = [];
-
-      // 1-B) 代理店（全て必須）
       const agentNames = ['agentCompany','agentPerson','agentBranch','agentEmail'];
       agentNames.forEach(name => {
         const el = formEl.elements[name];
@@ -597,17 +593,10 @@
           missing.push(el);
         }
       });
-
-      // 4) 効果：どれか1つ以上（multi-select）
-      const effectsEl = formEl.elements['effect'];
       const effectChecked = getMulti('effect').length > 0;
       const effectsError = $('#effectsError');
-      if(!effectChecked){
-        effectsError?.classList.remove('hidden');
-        missing.push(effectsEl || effectsError);
-      }else{
-        effectsError?.classList.add('hidden');
-      }
+      if(!effectChecked){ effectsError?.classList.remove('hidden'); missing.push(formEl.elements['effect']||effectsError); }
+      else { effectsError?.classList.add('hidden'); }
 
       if(missing.length){
         const first = missing[0];
@@ -619,7 +608,7 @@
       return true;
     }
 
-    /* ========== acoustics ========== */
+    /* ========== acoustics (background) ========== */
     const alpha = {
       gypsum:{a500:0.06,a1000:0.06}, rc:{a500:0.02,a1000:0.02},
       glass_s:{a500:0.15,a1000:0.10}, glass_d:{a500:0.12,a1000:0.10},
@@ -659,7 +648,7 @@
       const T500 = 0.161 * V / Math.max(0.001, Aeq500);
       const T1000= 0.161 * V / Math.max(0.001, Aeq1000);
 
-      // グラフ用：6帯域の簡易Aeq/T（500/1000からの推定）
+      // 6帯域の簡易推定（500/1000からの線形近似）
       const freqs=[250,500,1000,2000,4000,8000];
       const Aeq_values=freqs.map(f=>{
         if(f===500) return Aeq500;
@@ -712,7 +701,34 @@
       return Math.max(0, Math.round(s));
     }
 
-    /* ========== iwasemi 枚数（表ベース補間） ========== */
+    /* ========== iwasemi 製品定義（※面積修正反映） ========== */
+    const FREQS = [250, 500, 1000, 2000, 4000, 8000];
+    const FREQ_LABELS = FREQS.map(f => f + 'Hz');
+
+    const PRODUCTS = {
+      rc: {
+        key: 'rc',
+        name: 'iwasemi RC-α',
+        panelArea: 0.03, // 代表値（実測値があれば更新）
+        alpha: { 250: 0.05, 500: 0.35, 1000: 0.76, 2000: 0.22, 4000: 0.11, 8000: 0.13 }
+      },
+      sq: {
+        key: 'sq',
+        name: 'iwasemi SQ-α',
+        panelArea: 0.050625, // ← 修正値
+        alpha: { 250: 0.13, 500: 0.70, 1000: 0.66, 2000: 0.17, 4000: 0.08, 8000: 0.07 }
+      },
+      hx: {
+        key: 'hx',
+        name: 'iwasemi HX-α',
+        panelArea: 0.0286862, // ← 修正値
+        alpha: { 250: 0.09, 500: 0.56, 1000: 0.85, 2000: 0.21, 4000: 0.12, 8000: 0.06 }
+      }
+    };
+    function alphaVec(p){ return FREQS.map(f => p.alpha[f]); }
+
+    /* ========== パネル枚数ロジック ========== */
+    // RC/HX：従来アンカー補間
     const PANEL_ANCHORS=[
       {a:5,p:50},{a:10,p:100},{a:15,p:150},{a:20,p:190},{a:25,p:230},{a:30,p:270},
       {a:40,p:350},{a:50,p:430},{a:60,p:500},{a:80,p:640},{a:100,p:770}
@@ -724,21 +740,59 @@
       const last=PANEL_ANCHORS[PANEL_ANCHORS.length-1], prev=PANEL_ANCHORS[PANEL_ANCHORS.length-2];
       const slope=(last.p-prev.p)/(last.a-prev.a); return Math.round(last.p + (area-last.a)*slope);
     }
+    // SQ：提示式
+    function panelsSQ(area){
+      if (area <= 0) return 0;
+      const isInt = Math.abs(area - Math.round(area)) < 1e-9;
+      if (isInt) {
+        const A = Math.round(area);
+        return (A >= 1) ? (5*A + 5) : 5;
+      } else {
+        return 5*(Math.ceil(area)+1);
+      }
+    }
+
     const UNIT_PRICE=5000;
-    function buildPanelSolutions(d, primaryKey, rt){
-      const perRoomStd=Math.max(1, interpPanels(d.area)); const totalStd=perRoomStd*Math.max(1,Math.round(d.rooms)); const totalPro=Math.max(totalStd+1, Math.round(totalStd*1.2));
+
+    function buildPanelSolutionsForProduct(d, primaryKey, rt, productKey){
+      const rooms = Math.max(1, Math.round(d.rooms));
+      const area = Math.max(0.1, d.area);
+
+      let perRoomStd = 0;
+      if (productKey === 'sq') perRoomStd = panelsSQ(area);
+      else perRoomStd = interpPanels(area); // rc/hx
+
+      const totalStd = perRoomStd * rooms;
+      const totalPro = Math.max(totalStd+1, Math.round(totalStd*1.2));
+
       function bomFor(panels, withSeal){
-        const parts=[]; const pricePanels=panels*UNIT_PRICE; parts.push({name:'iwasemi パネル（代表）', qty:panels, price:pricePanels});
+        const parts=[]; const pricePanels=panels*UNIT_PRICE; parts.push({name:`${PRODUCTS[productKey].name}`, qty:panels, price:pricePanels});
         let extras=0;
-        if (withSeal){ const rooms=Math.max(1,Math.round(d.rooms)); const seal=15000*rooms;
-          parts.push({name:'隙間封止（参考費用・別途手配）', qty:rooms, price:seal}); extras+=seal; }
+        if (withSeal){ const seal=15000*rooms; parts.push({name:'隙間封止（参考費用・別途手配）', qty:rooms, price:seal}); extras+=seal; }
         const install=Math.round(pricePanels*0.20); parts.push({name:'仮設・夜間施工（概算）', qty:1, price:install});
         const subtotal=pricePanels+extras+install; return {bom:parts, subtotal};
       }
+
       const needSeal=(primaryKey==='abs_plus_seal' || primaryKey==='isolation');
       const std=bomFor(totalStd, needSeal), pro=bomFor(totalPro, needSeal);
-      return { perRoomStd,totalStd,totalPro, Ttgt: rtTarget(d.spaceType,d.uses),
-        plans:[{name:'標準', panels:totalStd, bom:std.bom, subtotal:std.subtotal},{name:'強め', panels:totalPro, bom:pro.bom, subtotal:pro.subtotal}] };
+
+      return {
+        product: PRODUCTS[productKey],
+        perRoomStd, totalStd, totalPro,
+        Ttgt: rtTarget(d.spaceType,d.uses),
+        plans:[
+          {name:'標準', panels:totalStd, bom:std.bom, subtotal:std.subtotal},
+          {name:'強め', panels:totalPro, bom:pro.bom, subtotal:pro.subtotal}
+        ]
+      };
+    }
+
+    function buildAllPanelSolutions(d, primaryKey, rt){
+      return {
+        rc: buildPanelSolutionsForProduct(d, primaryKey, rt, 'rc'),
+        sq: buildPanelSolutionsForProduct(d, primaryKey, rt, 'sq'),
+        hx: buildPanelSolutionsForProduct(d, primaryKey, rt, 'hx')
+      };
     }
 
     /* ========== Recommend（文章） ========== */
@@ -753,7 +807,7 @@
         isolation:'残響（音の響き）に加え、欄間や天井、ドアまわりから音が伝わりやすいため、仕切り設置や遮音対策を行うことが有効です。'
       };
 
-      if (S.S_abs===null && S.S_isl===null){ // TELECUBE
+      if (S.S_abs===null && S.S_isl===null){
         list.push({key:'absorption',label:'吸音（ブース内面）',priority:'高',score:50,reason:TEXT.booth_abs});
         return list;
       }
@@ -806,14 +860,16 @@
       };
     }
 
-    function renderProposalSummary(d, recs, S, rt, panelSol){
+    function renderProposalSummary(d, recs, S, rt, allPanelSols){
       const top = recs[0];
-      const std=panelSol.plans.find(p=>p.name==='標準');
-      const pro=panelSol.plans.find(p=>p.name==='強め');
 
+      // Price range across 3 products (標準〜強め)
+      const allPlans = Object.values(allPanelSols).flatMap(ps => ps.plans);
+      const minStd = Math.min(...allPlans.filter(p=>p.name==='標準').map(p=>p.subtotal));
+      const maxPro = Math.max(...allPlans.filter(p=>p.name==='強め').map(p=>p.subtotal));
       let priceLine = `<span class="badge bg-white/60 dark:bg-slate-800/60">別途見積</span>`;
       if (['吸音','吸音＋隙間対策','吸音（ブース内面）'].includes(top.label) || ['absorption','abs_plus_seal'].includes(top.key)){
-        priceLine = `<span class="tabular-nums font-semibold">${yen(std.subtotal)}〜${yen(pro.subtotal)}</span> <span class="text-xs text-slate-500">（概算・税抜）</span>`;
+        priceLine = `<span class="tabular-nums font-semibold">${yen(minStd)}〜${yen(maxPro)}</span> <span class="text-xs text-slate-500">（概算・税抜）</span>`;
       }
 
       const CTA = `
@@ -838,7 +894,7 @@
               <p class="text-sm mt-1 text-emerald-900/85 dark:text-emerald-100/85">${top.reason}</p>
             </div>
             <div class="text-right">
-              <div class="text-xs text-slate-500">概算見積</div>
+              <div class="text-xs text-slate-500">概算見積（3製品の概算レンジ）</div>
               <div class="text-lg">${priceLine}</div>
             </div>
           </div>
@@ -846,25 +902,20 @@
           ${contact}
         </div>`;
 
-      // ▼▼ ここに「残響時間シミュレーション」を差し込み ▼▼
-      if (rt && Array.isArray(rt.T_values) && rt.T_values.length){
-        $('#proposalSummary').insertAdjacentHTML('beforeend', `
-          <div id="rtChartInlineWrap" class="mt-4 p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <div class="text-base font-semibold mb-2">残響時間シミュレーション</div>
-            <div class="text-xs text-slate-500 mb-3" id="rtChartInlineSummary">
-              目標：会議室の目安とする残響時間は <b>0.6秒</b> です（用途により自動補正）。
-            </div>
-            <div class="relative" style="height:280px">
-              <canvas id="rtChartInline" aria-label="残響時間グラフ（提案直下）" role="img"></canvas>
-            </div>
-            <!-- ▼▼ 説明文用のコンテナを追加 ▼▼ -->
-            <div id="rtChartInlineDescription" class="mt-4 text-sm text-slate-700 dark:text-slate-200 space-y-2">
-              <!-- ここにJSから計算結果が挿入されます -->
-            </div>
+      // ▼▼ インライン残響グラフ（3製品オーバーレイ） ▼▼
+      $('#proposalSummary').insertAdjacentHTML('beforeend', `
+        <div id="rtChartInlineWrap" class="mt-4 p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <div class="text-base font-semibold mb-2">残響時間シミュレーション（標準枚数・3製品比較）</div>
+          <div class="text-xs text-slate-500 mb-3" id="rtChartInlineSummary">
+            目標：会議室の目安とする残響時間は <b>0.6秒</b> です（用途により自動補正）。
           </div>
-        `);
-        try { renderRTChartInline(d, rt, panelSol); } catch(e){ console.warn(e); }
-      }
+          <div class="relative" style="height:320px">
+            <canvas id="rtChartInline" aria-label="残響時間グラフ（3製品比較）" role="img"></canvas>
+          </div>
+          <div id="rtChartInlineDescription" class="mt-4 text-sm text-slate-700 dark:text-slate-200 space-y-2"></div>
+        </div>
+      `);
+      try { renderRTChartInlineMulti(d, rt, allPanelSols); } catch(e){ console.warn(e); }
 
       const needTips = d.features.some(x=>['transom','shared_plenum','grille'].includes(x));
       if (needTips) {
@@ -879,9 +930,8 @@
       }
     }
 
-    function renderEvidence(d,S,rt, recs=[], panelSol=null){ // 引数追加
+    function renderEvidence(d,S,rt, recs=[], allPanelSols=null){
       const L = (rt.T500==null? {line1:'残響：—（ブース製品のため参考）', line2:`吸音必要度 ${(S.S_abs??'—')} / 遮音必要度 ${(S.S_isl??'—')}（0〜100）`, line3:'回り込みの要因：—', explainRT:'', explainLeak:''} : evidenceLines(d,S,rt));
-      
       let card1_html = `
         <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
           <div class="text-sm text-slate-500 mb-1">① サマリ指標（0〜100）</div>
@@ -899,7 +949,7 @@
           </div>
           <div class="text-xs text-slate-500 mt-2">${d.company||'（未入力）'}・${d.person||''}／${d.rooms}室・${d.area}m²/室</div>
         </div>`;
-      
+
       let card2_html = `
         <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
           <div class="text-sm text-slate-500 mb-1">② 侵入・回り込み</div>
@@ -907,24 +957,14 @@
           <div class="text-xs mt-2">${L.explainLeak}</div>
         </div>`;
 
+      // recsが1枚のときの価格レンジ（3製品）
       let card3_html = '';
-      // 要望2：recsが1枚の場合、3枚目のカードとして evidenceWrap に描画
-      if (recs && recs.length === 1 && panelSol) {
+      if (recs && recs.length === 1 && allPanelSols) {
+        const plans = Object.values(allPanelSols).flatMap(p=>p.plans);
+        const stdMin = Math.min(...plans.filter(p=>p.name==='標準').map(p=>p.subtotal));
+        const proMax = Math.max(...plans.filter(p=>p.name==='強め').map(p=>p.subtotal));
         const r = recs[0];
-        let priceHtml = `<span class="badge bg-white/60 dark:bg-slate-800/60">別途見積</span>`;
-        
-        // panelSol があり、plans 配列があることを確認
-        if (panelSol.plans && panelSol.plans.length >= 2) {
-          // 'absorption' または 'abs_plus_seal' のキーの場合
-          if (r.key === 'absorption' || r.key === 'abs_plus_seal') {
-            const std = panelSol.plans.find(p => p.name === '標準');
-            const pro = panelSol.plans.find(p => p.name === '強め');
-            if (std && pro) {
-              priceHtml = `${yen(std.subtotal)}〜${yen(pro.subtotal)} <span class="text-xs text-slate-500">（概算・税抜）</span>`;
-            }
-          }
-        }
-        
+        const priceHtml = `${yen(stdMin)}〜${yen(proMax)} <span class="text-xs text-slate-500">（概算・税抜）</span>`;
         card3_html = `
           <div class="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/60">
             <div class="flex items-baseline justify-between mb-1">
@@ -935,23 +975,17 @@
             <div class="mt-2"><span class="text-xs text-slate-500">概算見積：</span><span class="text-base font-semibold tabular-nums">${priceHtml}</span></div>
           </div>`;
       }
-
       $('#evidenceWrap').innerHTML = card1_html + card2_html + card3_html;
     }
 
-    function renderRecommendations(recs, panelSol, primaryKey){
-      // 要望2：recsが1枚の場合は evidenceWrap に描画したので、ここでは描画しない
-      if (recs && recs.length === 1) {
-        $('#recommendWrap').innerHTML = '';
-        return;
-      }
-      // 以下、recs.length が 0 または 2以上 の場合
+    function renderRecommendations(recs, allPanelSols, primaryKey){
+      if (recs && recs.length === 1) { $('#recommendWrap').innerHTML = ''; return; }
+      const plans = Object.values(allPanelSols).flatMap(p=>p.plans);
+      const stdMin = Math.min(...plans.filter(p=>p.name==='標準').map(p=>p.subtotal));
+      const proMax = Math.max(...plans.filter(p=>p.name==='強め').map(p=>p.subtotal));
       $('#recommendWrap').innerHTML = recs.map(r=>{
         let priceHtml = `<span class="badge bg-white/60 dark:bg-slate-800/60">別途見積</span>`;
-        if (r.key==='absorption' || r.key==='abs_plus_seal'){
-          const std=panelSol.plans.find(p=>p.name==='標準'); const pro=panelSol.plans.find(p=>p.name==='強め');
-          priceHtml = `${yen(std.subtotal)}〜${yen(pro.subtotal)} <span class="text-xs text-slate-500">（概算・税抜）</span>`;
-        }
+        if (r.key==='absorption' || r.key==='abs_plus_seal'){ priceHtml = `${yen(stdMin)}〜${yen(proMax)} <span class="text-xs text-slate-500">（概算・税抜）</span>`; }
         return `
           <div class="p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/60">
             <div class="flex items-baseline justify-between mb-1">
@@ -964,29 +998,37 @@
       }).join('');
     }
 
-    function renderIwasemiDetail(d, panelSol, primaryKey){
-      const std=panelSol.plans.find(p=>p.name==='標準'); const pro=panelSol.plans.find(p=>p.name==='強め');
-      const makeBom = (b)=> b.map(x=>`<div class="flex items-center justify-between text-sm"><span>${x.name} × <b>${x.qty}</b></span><span class="tabular-nums">${yen(x.price)}</span></div>`).join('');
-      $('#iwasemiWrap').innerHTML = `
-        <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <div class="text-lg font-semibold mb-1">iwasemiの場合の見積内容</div>
-          <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">数量・代表種類、工法（仮設/夜間施工を含む）、概算金額を表示します。</p>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-              <div class="font-semibold mb-2">標準プラン</div>
-              ${makeBom(std.bom)}
-              <div class="mt-2 flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
-                <span class="text-sm">小計</span><span class="text-lg font-bold">${yen(std.subtotal)}</span>
+    function renderIwasemiDetailMulti(d, allPanelSols, primaryKey){
+      const blocks = Object.values(allPanelSols).map(ps=>{
+        const std=ps.plans.find(p=>p.name==='標準'); const pro=ps.plans.find(p=>p.name==='強め');
+        const mk = (b)=> b.map(x=>`<div class="flex items-center justify-between text-sm"><span>${x.name} × <b>${x.qty}</b></span><span class="tabular-nums">${yen(x.price)}</span></div>`).join('');
+        return `
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 md:p-5">
+            <div class="text-lg font-semibold mb-1">${ps.product.name} の見積内容</div>
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">数量・代表種類、工法（仮設/夜間施工を含む）、概算金額を表示します。</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                <div class="font-semibold mb-2">標準プラン</div>
+                ${mk(std.bom)}
+                <div class="mt-2 flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span class="text-sm">小計</span><span class="text-lg font-bold">${yen(std.subtotal)}</span>
+                </div>
               </div>
-            </div>
-            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
-              <div class="font-semibold mb-2">強めプラン</div>
-              ${makeBom(pro.bom)}
-              <div class="mt-2 flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
-                <span class="text-sm">小計</span><span class="text-lg font-bold">${yen(pro.subtotal)}</span>
+              <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                <div class="font-semibold mb-2">強めプラン</div>
+                ${mk(pro.bom)}
+                <div class="mt-2 flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span class="text-sm">小計</span><span class="text-lg font-bold">${yen(pro.subtotal)}</span>
+                </div>
               </div>
             </div>
           </div>
+        `;
+      }).join('');
+      $('#iwasemiWrap').innerHTML = `
+        <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <div class="text-lg font-semibold mb-2">iwasemiの場合の見積内容（3製品）</div>
+          <div class="grid grid-cols-1 gap-4">${blocks}</div>
           <p class="text-xs text-slate-500 mt-3">※ 概算（税抜）。仕上げ・物流・現場条件で変動します。<br>※ 「隙間封止（参考費用・別途手配）」はPxDT施工対象外です。必要に応じて内装業者等へご手配ください。</p>
         </div>`;
     }
@@ -1163,33 +1205,6 @@
         </div>`;
     }
 
-    /* ===== TELECUBE 参考事例 ===== */
-    const TELECUBE_PHOTOS = [
-      {title:'Cタイプ／1人用（片面ガラス）', sheets:'RC-α21枚', id:'1Ep_TSHn8RYXW1qHbiuxyAbuf6hdIL0Vk'},
-      {title:'Cタイプ／4人用（片面ガラス）', sheets:'RC-α42枚', id:'1SASFmd2OW48eis-z6AsaO6l2vwJghsmV'},
-      {title:'Cタイプ／4人用（両面ガラス）', sheets:'RC-α86枚', id:'1xBpMHpHT6IGGvdhxeTmC0dvoHnyNZ64F'},
-      {title:'Cタイプ／多人用（片面ガラス）', sheets:'RC-α67枚', id:'1-kcfy7ogmZqSAsiJTKNwQk07a2QmNWsN'}
-    ];
-    function gdriveThumb(id, w=1600){ return `https://drive.google.com/thumbnail?id=${id}&sz=w${w}`; }
-    function renderTelecubeGallery(){
-      const wrap = $('#telecubeWrap'); if(!wrap) return;
-      wrap.innerHTML = `
-        <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <div class="text-base font-semibold mb-3">TELECUBE 参考事例</div>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            ${TELECUBE_PHOTOS.map(p=>`
-              <div class="rounded-xl overflow-hidden bg-slate-900/5 dark:bg-white/5 border border-slate-200/70 dark:border-slate-700">
-                <img class="telecube-img" src="${gdriveThumb(p.id)}" alt="${p.title}">
-                <div class="p-3">
-                  <div class="text-sm font-semibold">${p.title}</div>
-                  <div class="text-xs text-slate-500 mt-1">${p.sheets}</div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>`;
-    }
-
     /* ========== Googleフォーム送信 ========== */
     const GF_FORM_ID='1FAIpQLSf8Eo_j14pXA3mTRSt5tN_gQ0Py46cV-8Rd1ZBW7Nt9cltIpQ';
     const GF_ENDPOINT=`https://docs.google.com/forms/d/e/${GF_FORM_ID}/formResponse`;
@@ -1245,7 +1260,10 @@
       agentEmail:'entry.1181916971',
     };
     function buildGoogleFormPayload(diag){
-      const d=diag.input, S=diag.scores, recs=diag.recommendations, panels=diag.panels, top=recs[0]||{key:'measure',label:'計測／トライアル',reason:'',score:0};
+      const d=diag.input, S=diag.scores, recs=diag.recommendations, top=recs[0]||{key:'measure',label:'計測／トライアル',reason:'',score:0};
+
+      // フォームの互換性のため RC-α の標準/強めを代表値として送る
+      const pRc = diag.panels.rc;
       return {
         company:d.company, person:d.person, email:d.email, pref:d.pref, project:d.project, category:d.category, spaceType:d.spaceType,
         uses:d.uses.join(','), sources:d.sources.join(','), area:d.area, rooms:d.rooms, ceilHeight:d.ceilHeight,
@@ -1256,8 +1274,8 @@
         effects:d.effects.join(','), zeroLeak:d.zeroLeak?'yes':'no', selfScore:d.selfScore,
 
         S_abs:S.S_abs??'NA', S_isl:S.S_isl??'NA', primaryKey:top.key, topLabel:top.label, topReason:top.reason,
-        panels_std: panels.plans.find(p=>p.name==='標準')?.panels||0, panels_pro: panels.plans.find(p=>p.name==='強め')?.panels||0,
-        price_std: panels.plans.find(p=>p.name==='標準')?.subtotal||0, price_pro: panels.plans.find(p=>p.name==='強め')?.subtotal||0,
+        panels_std: pRc?.plans.find(p=>p.name==='標準')?.panels||0, panels_pro: pRc?.plans.find(p=>p.name==='強め')?.panels||0,
+        price_std: pRc?.plans.find(p=>p.name==='標準')?.subtotal||0, price_pro: pRc?.plans.find(p=>p.name==='強め')?.subtotal||0,
         raw_json: JSON.stringify(diag),
 
         agentCompany:d.agentCompany, agentPerson:d.agentPerson, agentEmail:d.agentEmail,
@@ -1276,17 +1294,12 @@
     }
 
     /* ========== グラフ描画 ========== */
-    const FREQS = [250, 500, 1000, 2000, 4000, 8000];
-    const FREQ_LABELS = FREQS.map(f => f + 'Hz');
-    const PANEL_AREA = 0.03;
-    const PANEL_ALPHA_FREQS = [0.05, 0.35, 0.76, 0.22, 0.11, 0.13];
-
     function commonChartOptions(targetLine){
       return {
         responsive:true, maintainAspectRatio:false,
         scales: {
           x: {
-            type:'category', // Chart.js category scale（公式）
+            type:'category',
             title:{display:true,text:'周波数 (Hz)'},
             ticks:{
               callback: (value, idx)=> {
@@ -1329,53 +1342,33 @@
       };
     }
 
-    function renderRTChart(d, rt_before, panelSol) {
-      try {
-        const std_panels = panelSol.plans.find(p=>p.name==='標準')?.panels || panelSol.basePanels || 0;
-        const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => alpha_panel * PANEL_AREA * std_panels);
-        const T_after_std = (rt_before.Aeq_values||[]).map((Aeq_before, i) => {
-          const Aeq_total = Aeq_before + (added_Aeq_std[i]||0);
-          return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
-        });
-        const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt||0.6);
-        const ctx = $('#rtChart').getContext('2d');
-        if (window.myRtChart) { try{ window.myRtChart.destroy(); }catch(e){} } // 既存インスタンス破棄（公式API）
-        window.myRtChart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: FREQ_LABELS,
-            datasets: [
-              {label: '現状（推定）', data: (rt_before.T_values||[]).map(v=>Number(fmt2(v))), fill:false, tension:0.1},
-              {label: 'iwasemi設置後（標準）', data: T_after_std.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
-              {label: '目標残響時間', data: T_target_line.map(v=>Number(fmt2(v))), fill:false, borderDash:[5,5], pointRadius:0, borderWidth:1.5}
-            ]
-          },
-          options: commonChartOptions(panelSol.Ttgt||0.6),
-          plugins:[convBandPlugin()]
-        });
-
-        // サマリ（下部グラフ）
-        const tgt = panelSol.Ttgt||0.6;
-        $('#rtChartSummary').innerHTML =
-          `目標：会議室の目安とする残響時間は <b>0.6秒</b> です（今回の目標＝<b>${fmt2(tgt)}秒</b>）。`;
-
-        // $('#rtChartWrap').classList.remove('hidden'); // 要望1：下部グラフは表示しない
-      } catch(e) {
-        console.error('グラフの描画に失敗しました:', e);
-        $('#rtChartWrap').classList.add('hidden');
-      }
+    function calcTAfterForProduct(rt_before, panelsStd, product){
+      const a = alphaVec(product);
+      const added_Aeq = a.map((alpha_panel,i)=> alpha_panel * product.panelArea * panelsStd);
+      const T_after = (rt_before.Aeq_values||[]).map((Aeq_before, i) => {
+        const Aeq_total = Aeq_before + (added_Aeq[i]||0);
+        return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
+      });
+      return { T_after, added_Aeq };
     }
 
-    function renderRTChartInline(d, rt_before, panelSol){
+    function renderRTChartInlineMulti(d, rt_before, allPanelSols){
       try{
-        const std_panels = panelSol.plans.find(p=>p.name==='標準')?.panels || panelSol.basePanels || 0;
-        const added_Aeq_std = PANEL_ALPHA_FREQS.map(alpha_panel => alpha_panel * PANEL_AREA * std_panels);
-        const T_after_std = (rt_before.Aeq_values||[]).map((Aeq_before, i) => {
-          const Aeq_total = Aeq_before + (added_Aeq_std[i]||0);
-          return 0.161 * rt_before.V / Math.max(0.001, Aeq_total);
-        });
-        const T_target_line = Array(FREQS.length).fill(panelSol.Ttgt||0.6);
         const ctx = $('#rtChartInline').getContext('2d');
+
+        // 標準枚数（各製品）
+        const stdPanels = {
+          rc: allPanelSols.rc.plans.find(p=>p.name==='標準')?.panels || 0,
+          sq: allPanelSols.sq.plans.find(p=>p.name==='標準')?.panels || 0,
+          hx: allPanelSols.hx.plans.find(p=>p.name==='標準')?.panels || 0
+        };
+
+        const rcAfter = calcTAfterForProduct(rt_before, stdPanels.rc, PRODUCTS.rc);
+        const sqAfter = calcTAfterForProduct(rt_before, stdPanels.sq, PRODUCTS.sq);
+        const hxAfter = calcTAfterForProduct(rt_before, stdPanels.hx, PRODUCTS.hx);
+
+        const T_target_line = Array(FREQS.length).fill(allPanelSols.rc.Ttgt||0.6);
+
         if (window.myRtChartInline) { try{ window.myRtChartInline.destroy(); }catch(e){} }
         window.myRtChartInline = new Chart(ctx, {
           type:'line',
@@ -1383,49 +1376,62 @@
             labels:FREQ_LABELS,
             datasets:[
               {label: '現状（推定）', data:(rt_before.T_values||[]).map(v=>Number(fmt2(v))), fill:false, tension:0.1},
-              {label: 'iwasemi設置後（標準）', data:T_after_std.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
+              {label: 'RC-α（標準）', data:rcAfter.T_after.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
+              {label: 'SQ-α（標準）', data:sqAfter.T_after.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
+              {label: 'HX-α（標準）', data:hxAfter.T_after.map(v=>Number(fmt2(v))), fill:false, tension:0.1, borderWidth:2},
               {label: '目標残響時間', data:T_target_line.map(v=>Number(fmt2(v))), fill:false, borderDash:[5,5], pointRadius:0, borderWidth:1.5}
             ]
           },
-          options: commonChartOptions(panelSol.Ttgt||0.6),
+          options: commonChartOptions(allPanelSols.rc.Ttgt||0.6),
           plugins:[convBandPlugin()]
         });
 
-        // サマリ（提案直下グラフ）
-        const tgt = panelSol.Ttgt||0.6;
+        // サマリテキスト
+        const tgt = allPanelSols.rc.Ttgt||0.6;
         $('#rtChartInlineSummary').innerHTML =
           `目標：会議室の目安とする残響時間は <b>0.6秒</b> です（今回の目標＝<b>${fmt2(tgt)}秒</b>）。`;
 
-        // ▼▼ ここからが追加ロジック ▼▼
-
-        // 500Hz (idx 1) と 1000Hz (idx 2) の値を取得
-        // rt_before.T_values が存在し、長さが3以上あることを確認
+        // 500/1000Hz 平均（前後＆減少率）
         const T_500_before = (rt_before.T_values && rt_before.T_values.length > 1) ? rt_before.T_values[1] : 0;
         const T_1000_before = (rt_before.T_values && rt_before.T_values.length > 2) ? rt_before.T_values[2] : 0;
         const T_avg_before = (T_500_before + T_1000_before) / 2;
 
-        const T_500_after = (T_after_std && T_after_std.length > 1) ? T_after_std[1] : 0;
-        const T_1000_after = (T_after_std && T_after_std.length > 2) ? T_after_std[2] : 0;
-        const T_avg_after_std = (T_500_after + T_1000_after) / 2;
-
-        let reduction_percent = 0;
-        if (T_avg_before > 0.001) { // ゼロ除算を避ける
-          reduction_percent = ((T_avg_before - T_avg_after_std) / T_avg_before) * 100;
+        function avg500_1000(arr){
+          const v500 = (arr && arr.length>1)?arr[1]:0;
+          const v1000= (arr && arr.length>2)?arr[2]:0;
+          return (v500+v1000)/2;
         }
+        function redPct(before, after){ return before>0.001 ? ((before-after)/before)*100 : 0; }
+
+        const avgRC = avg500_1000(rcAfter.T_after);
+        const avgSQ = avg500_1000(sqAfter.T_after);
+        const avgHX = avg500_1000(hxAfter.T_after);
+
+        const rRC = Math.round(redPct(T_avg_before, avgRC));
+        const rSQ = Math.round(redPct(T_avg_before, avgSQ));
+        const rHX = Math.round(redPct(T_avg_before, avgHX));
 
         const descWrap = $('#rtChartInlineDescription');
         if (descWrap) {
           descWrap.innerHTML = `
             <div class="font-semibold text-base mb-1">【シミュレーション結果】</div>
-            <ul class="list-disc pl-5 space-y-1">
-              <li>通常会議室の500～1000Hzにおける平均残響時間は0.6秒程度となります。</li>
-              <li>今回の環境下では、人の声の帯域にあたる500～1000Hzにおける平均残響時間が <b class="font-bold text-red-600 dark:text-red-400">${fmt2(T_avg_before)}秒</b> と平均を大きく超える数値でした。</li>
-              <li>iwasemiを <b class="font-bold text-red-600 dark:text-red-400">${std_panels}枚</b> 設置した場合、 500～1,000Hzにおける平均残響時間 <b class="font-bold text-red-600 dark:text-red-400">${fmt2(T_avg_after_std)}秒</b> まで減少し、減少率 <b class="font-bold text-red-600 dark:text-red-400">${Math.round(reduction_percent)}％</b> の予測です。</li>
+            <ul class="list-disc pl-5 space-y-2">
+              <li>通常会議室の500～1000Hzにおける平均残響時間は<b class="font-bold">約0.6秒</b>程度となります。</li>
+              <li>今回の環境下では、人の声の帯域にあたる500～1000Hzにおける平均残響時間が
+                <b class="font-bold text-red-600 dark:text-red-400">${fmt2(T_avg_before)}秒</b> と、平均を上回る数値でした。
+              </li>
+              <li>${PRODUCTS.rc.name} を <b class="font-bold text-red-600 dark:text-red-400">${stdPanels.rc}枚</b> 設置した場合、
+                同帯域の平均残響時間は <b class="font-bold text-red-600 dark:text-red-400">${fmt2(avgRC)}秒</b> まで低下（減少率
+                <b class="font-bold text-red-600 dark:text-red-400">${rRC}%</b>）の予測です。</li>
+              <li>${PRODUCTS.sq.name} を <b class="font-bold text-red-600 dark:text-red-400">${stdPanels.sq}枚</b> 設置した場合、
+                同帯域の平均残響時間は <b class="font-bold text-red-600 dark:text-red-400">${fmt2(avgSQ)}秒</b> まで低下（減少率
+                <b class="font-bold text-red-600 dark:text-red-400">${rSQ}%</b>）の予測です。</li>
+              <li>${PRODUCTS.hx.name} を <b class="font-bold text-red-600 dark:text-red-400">${stdPanels.hx}枚</b> 設置した場合、
+                同帯域の平均残響時間は <b class="font-bold text-red-600 dark:text-red-400">${fmt2(avgHX)}秒</b> まで低下（減少率
+                <b class="font-bold text-red-600 dark:text-red-400">${rHX}%</b>）の予測です。</li>
             </ul>
           `;
         }
-        // ▲▲ 追加ロジックここまで ▲▲
-
       }catch(e){
         console.warn('inline chart error', e);
       }
@@ -1457,17 +1463,20 @@
       if (d.spaceType==='booth_tel'){
         const recs=[{key:'absorption',label:'吸音（ブース内面）',priority:'高',score:50,reason:'ブース内で残響（音の響き）が強く声がこもりやすいため、ガラスや金属面に小型吸音パネルを分散配置することが効果的です。'}];
         const dummyRT={T500:null,T1000:null,Aeq500:null,Aeq1000:null,V:V,A:d.area,H:H, Aeq_values:[], T_values:[]};
-        const S={S_abs:null,S_isl:null}; const primaryKey=recs[0].key; const panelSol=buildPanelSolutions(d, primaryKey, dummyRT);
+        const S={S_abs:null,S_isl:null}; const primaryKey=recs[0].key;
+
+        // 3製品のパネル算出（ブースでも見積用に作る）
+        const allPanelSols = buildAllPanelSolutions(d, primaryKey, dummyRT);
 
         clearResult();
-        renderProposalSummary(d, recs, S, dummyRT, panelSol);
-        renderEvidence(d, S, dummyRT, recs, panelSol); // 要望2：引数追加
-        renderRecommendations(recs, panelSol, primaryKey); // 要望2：recs=1なのでここは空になる
-        renderIwasemiDetail(d, panelSol, primaryKey);
+        renderProposalSummary(d, recs, S, dummyRT, allPanelSols);
+        renderEvidence(d, S, dummyRT, recs, allPanelSols);
+        renderRecommendations(recs, allPanelSols, primaryKey);
+        renderIwasemiDetailMulti(d, allPanelSols, primaryKey);
         renderNotes(primaryKey);
         renderTelecubeGallery();
 
-        const diag={input:d,scores:S,rt:dummyRT,recommendations:recs,panels:panelSol};
+        const diag={input:d,scores:S,rt:dummyRT,recommendations:recs,panels:allPanelSols};
         window.__diagResult=diag;
         if(!window.__autoPreview){ const payload=buildGoogleFormPayload(diag); const res=await postToGoogleForm(payload); toast(res?.ok?'診断に成功しました':'診断に失敗しました', !!res?.ok); }
         window.location.hash='#result';
@@ -1476,23 +1485,23 @@
 
       // 通常ルート
       const rt=calcRT(d); const S={S_abs:scoreAbs(d,rt), S_isl:scoreIsl(d,rt)};
-      const recs=recommend(d,S,rt); const primaryKey=recs[0]?.key||'absorption'; const panelSol=buildPanelSolutions(d, primaryKey, rt);
+      const recs=recommend(d,S,rt); const primaryKey=recs[0]?.key||'absorption';
+
+      const allPanelSols = buildAllPanelSolutions(d, primaryKey, rt);
 
       clearResult();
-      renderProposalSummary(d, recs, S, rt, panelSol);
-      renderEvidence(d, S, rt, recs, panelSol); // 要望2：引数追加
-      renderRecommendations(recs, panelSol, primaryKey); // 要望2：recs=1の場合は空になる
-      if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetail(d, panelSol, primaryKey);
+      renderProposalSummary(d, recs, S, rt, allPanelSols);
+      renderEvidence(d, S, rt, recs, allPanelSols);
+      renderRecommendations(recs, allPanelSols, primaryKey);
+      if (['absorption','abs_plus_seal'].includes(primaryKey)) renderIwasemiDetailMulti(d, allPanelSols, primaryKey);
       renderNotes(primaryKey);
 
       // 事例
       const matchedCases = selectCaseStudies(d, S, rt);
       renderCaseStudies(matchedCases);
 
-      // グラフ（下部も表示：詳細確認用）
-      // try { renderRTChart(d, rt, panelSol); } catch(e) { console.warn(e); } // 要望1：下部グラフの呼び出しを削除
-
-      const diag={input:d,scores:S,rt,recommendations:recs,panels:panelSol};
+      // 下部詳細グラフは非表示のまま
+      const diag={input:d,scores:S,rt,recommendations:recs,panels:allPanelSols};
       window.__diagResult=diag;
 
       const needsTip=d.features.some(x=>['transom','shared_plenum','grille'].includes(x));
@@ -1500,6 +1509,33 @@
 
       if(!window.__autoPreview){ const payload=buildGoogleFormPayload(diag); const res=await postToGoogleForm(payload); toast(res?.ok?'診断に成功しました':'診断に失敗しました', !!res?.ok); }
       window.location.hash='#result';
+    }
+
+    // ===== TELECUBE 参考事例 =====
+    const TELECUBE_PHOTOS = [
+      {title:'Cタイプ／1人用（片面ガラス）', sheets:'RC-α21枚', id:'1Ep_TSHn8RYXW1qHbiuxyAbuf6hdIL0Vk'},
+      {title:'Cタイプ／4人用（片面ガラス）', sheets:'RC-α42枚', id:'1SASFmd2OW48eis-z6AsaO6l2vwJghsmV'},
+      {title:'Cタイプ／4人用（両面ガラス）', sheets:'RC-α86枚', id:'1xBpMHpHT6IGGvdhxeTmC0dvoHnyNZ64F'},
+      {title:'Cタイプ／多人用（片面ガラス）', sheets:'RC-α67枚', id:'1-kcfy7ogmZqSAsiJTKNwQk07a2QmNWsN'}
+    ];
+    function gdriveThumb(id, w=1600){ return `https://drive.google.com/thumbnail?id=${id}&sz=w${w}`; }
+    function renderTelecubeGallery(){
+      const wrap = $('#telecubeWrap'); if(!wrap) return;
+      wrap.innerHTML = `
+        <div class="p-4 md:p-5 rounded-2xl border border-slate-200 dark:border-slate-700">
+          <div class="text-base font-semibold mb-3">TELECUBE 参考事例</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            ${TELECUBE_PHOTOS.map(p=>`
+              <div class="rounded-xl overflow-hidden bg-slate-900/5 dark:bg-white/5 border border-slate-200/70 dark:border-slate-700">
+                <img class="telecube-img" src="${gdriveThumb(p.id)}" alt="${p.title}">
+                <div class="p-3">
+                  <div class="text-sm font-semibold">${p.title}</div>
+                  <div class="text-xs text-slate-500 mt-1">${p.sheets}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
     }
 
     // ===== Compact Multi-Select enhancer =====
@@ -1534,15 +1570,13 @@
       // mount
       sel.classList.add('hidden');
       sel.parentNode.insertBefore(wrap, sel);
-      wrap.append(btn, menu, sel); // move select inside
+      wrap.append(btn, menu, sel);
 
       // interactions
       btn.addEventListener('click', ()=>{ menu.style.display = (menu.style.display==='block'?'none':'block'); });
       document.addEventListener('click', (e)=>{ if(!wrap.contains(e.target)) menu.style.display='none'; });
-      // keyboard close
       btn.addEventListener('keydown', e=>{ if(e.key==='Escape') menu.style.display='none'; });
 
-      // when native changes (programmatically)
       sel.addEventListener('change', renderChips);
     }
 
@@ -1555,7 +1589,6 @@
     $('#resetBtn').addEventListener('click', ()=>{
       formEl.reset(); updateProgress(); clearResult(); $('#effectsError')?.classList.add('hidden');
       $$('input[required],select[required]').forEach(el=>setInvalid(el,false));
-      // re-render multiselect chips after reset
       $$('select[multiple].ms-native').forEach(sel=>sel.dispatchEvent(new Event('change')));
     });
     $('#downloadJson').addEventListener('click', ()=>{

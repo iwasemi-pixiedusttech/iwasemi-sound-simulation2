@@ -852,10 +852,10 @@
       const feats=[]; if(d.features.includes('transom'))feats.push('欄間オープン'); if(d.features.includes('shared_plenum'))feats.push('共有天井裏'); if(d.features.includes('grille'))feats.push('ガラリ/換気開口');
       if(['gap_door_bottom','gap_frame','gap_penetration','gap_duct'].some(x=>d.features.includes(x)))feats.push('隙間あり'); if(d.sources.includes('invasion_ext'))feats.push('外部からの音の侵入');
       return {
-        line1:`残響：平均 ${fmt2(Tavg)}s / 目標 ${fmt2(Ttgt)}s（比 ${fmt2(ratio)}）`,
+        line1:`残響時間：平均 ${fmt2(Tavg)}s / 目標 ${fmt2(Ttgt)}s（比 ${fmt2(ratio)}）`,
         line2:`吸音必要度 ${(S.S_abs??'—')} / 遮音必要度 ${(S.S_isl??'—')}（スケール：0〜100）`,
         line3:`回り込みの要因：${feats.length?feats.join('・'):'特になし'}`,
-        explainRT: ratio>=1.3 ? '目標より残響が長いため、吸音導入で明瞭度の改善が見込めます。' : ratio<=0.9 ? '残響は良好な範囲です。吸音は補助的で十分な可能性があります。' : '残響はほぼ目標範囲です。用途により軽微な吸音で調整可能です。',
+        explainRT: ratio>=1.3 ? '目標より残響時間が長いため、吸音導入で明瞭度の改善が見込めます。' : ratio<=0.9 ? '残響時間は良好な範囲です。吸音は補助的で十分な可能性があります。' : '残響時間はほぼ目標範囲です。用途により軽微な吸音で調整可能です。',
         explainLeak: (S.S_isl??0)>=45 ? '欄間・共有天井や隙間等の回り込みが疑われます。隙間封止/遮音対策を検討ください。' : (S.S_isl??0)>=30 ? '軽微な回り込みの可能性があります。簡易対策で改善余地。' : '明確な回り込み要素は小さめです。'
       };
     }
